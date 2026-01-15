@@ -111,7 +111,7 @@ pub trait EphemeralAccountInterface {
 }
 ```
 
-See [Contract Documentation](./docs/contracts.md) for full API reference.
+See [Bridgelet Documentation](https://github.com/bridgelet-org/bridgelet) for full API reference.
 
 ## Events
 

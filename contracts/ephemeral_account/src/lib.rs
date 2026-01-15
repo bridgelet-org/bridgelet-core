@@ -1,13 +1,13 @@
 #![no_std]
 
-mod storage;
-mod events;
 mod errors;
+mod events;
+mod storage;
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, BytesN};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env};
 
 pub use errors::Error;
-pub use events::{AccountCreated, PaymentReceived, SweepExecuted, AccountExpired};
+pub use events::{AccountCreated, AccountExpired, PaymentReceived, SweepExecuted};
 pub use storage::{AccountStatus, DataKey};
 
 #[contract]
@@ -16,12 +16,12 @@ pub struct EphemeralAccountContract;
 #[contractimpl]
 impl EphemeralAccountContract {
     /// Initialize the ephemeral account with restrictions
-    /// 
+    ///
     /// # Arguments
     /// * `creator` - Address that created this account
     /// * `expiry_ledger` - Ledger number when account expires
     /// * `recovery_address` - Address to return funds if expired
-    /// 
+    ///
     /// # Errors
     /// Returns Error::AlreadyInitialized if called more than once
     pub fn initialize(
@@ -59,18 +59,14 @@ impl EphemeralAccountContract {
 
     /// Record an inbound payment to this ephemeral account
     /// Only the first payment is accepted
-    /// 
+    ///
     /// # Arguments
     /// * `amount` - Payment amount
     /// * `asset` - Asset address
-    /// 
+    ///
     /// # Errors
     /// Returns Error::PaymentAlreadyReceived if payment already recorded
-    pub fn record_payment(
-        env: Env,
-        amount: i128,
-        asset: Address,
-    ) -> Result<(), Error> {
+    pub fn record_payment(env: Env, amount: i128, asset: Address) -> Result<(), Error> {
         // Check initialized
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
@@ -100,19 +96,15 @@ impl EphemeralAccountContract {
 
     /// Execute sweep to destination wallet
     /// Transfers all funds to the specified destination
-    /// 
+    ///
     /// # Arguments
     /// * `destination` - Recipient wallet address
     /// * `auth_signature` - Authorization signature from off-chain system
-    /// 
+    ///
     /// # Errors
     /// Returns Error::Unauthorized if authorization fails
     /// Returns Error::AlreadySwept if sweep already executed
-    pub fn sweep(
-        env: Env,
-        destination: Address,
-        auth_signature: BytesN<64>,
-    ) -> Result<(), Error> {
+    pub fn sweep(env: Env, destination: Address, auth_signature: BytesN<64>) -> Result<(), Error> {
         // Check initialized
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
@@ -164,7 +156,7 @@ impl EphemeralAccountContract {
 
         let expiry_ledger = storage::get_expiry_ledger(&env);
         let current_ledger = env.ledger().sequence();
-        
+
         current_ledger >= expiry_ledger
     }
 
@@ -179,7 +171,7 @@ impl EphemeralAccountContract {
 
     /// Expire the account and return funds to recovery address
     /// Can only be called after expiry ledger is reached
-    /// 
+    ///
     /// # Errors
     /// Returns Error::NotExpired if called before expiry ledger
     pub fn expire(env: Env) -> Result<(), Error> {

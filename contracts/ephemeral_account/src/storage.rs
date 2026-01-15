@@ -43,20 +43,30 @@ pub fn get_creator(env: &Env) -> Address {
 
 // Expiry ledger
 pub fn set_expiry_ledger(env: &Env, ledger: u32) {
-    env.storage().instance().set(&DataKey::ExpiryLedger, &ledger);
+    env.storage()
+        .instance()
+        .set(&DataKey::ExpiryLedger, &ledger);
 }
 
 pub fn get_expiry_ledger(env: &Env) -> u32 {
-    env.storage().instance().get(&DataKey::ExpiryLedger).unwrap()
+    env.storage()
+        .instance()
+        .get(&DataKey::ExpiryLedger)
+        .unwrap()
 }
 
 // Recovery address
 pub fn set_recovery_address(env: &Env, address: &Address) {
-    env.storage().instance().set(&DataKey::RecoveryAddress, address);
+    env.storage()
+        .instance()
+        .set(&DataKey::RecoveryAddress, address);
 }
 
 pub fn get_recovery_address(env: &Env) -> Address {
-    env.storage().instance().get(&DataKey::RecoveryAddress).unwrap()
+    env.storage()
+        .instance()
+        .get(&DataKey::RecoveryAddress)
+        .unwrap()
 }
 
 // Payment
@@ -65,15 +75,22 @@ pub fn has_payment_received(env: &Env) -> bool {
 }
 
 pub fn set_payment_received(env: &Env, value: bool) {
-    env.storage().instance().set(&DataKey::PaymentReceived, &value);
+    env.storage()
+        .instance()
+        .set(&DataKey::PaymentReceived, &value);
 }
 
 pub fn set_payment_amount(env: &Env, amount: i128) {
-    env.storage().instance().set(&DataKey::PaymentAmount, &amount);
+    env.storage()
+        .instance()
+        .set(&DataKey::PaymentAmount, &amount);
 }
 
 pub fn get_payment_amount(env: &Env) -> i128 {
-    env.storage().instance().get(&DataKey::PaymentAmount).unwrap_or(0)
+    env.storage()
+        .instance()
+        .get(&DataKey::PaymentAmount)
+        .unwrap_or(0)
 }
 
 pub fn set_payment_asset(env: &Env, asset: &Address) {
@@ -81,7 +98,10 @@ pub fn set_payment_asset(env: &Env, asset: &Address) {
 }
 
 pub fn get_payment_asset(env: &Env) -> Address {
-    env.storage().instance().get(&DataKey::PaymentAsset).unwrap()
+    env.storage()
+        .instance()
+        .get(&DataKey::PaymentAsset)
+        .unwrap()
 }
 
 // Status
