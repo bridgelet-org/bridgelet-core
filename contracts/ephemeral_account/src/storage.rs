@@ -17,7 +17,6 @@ pub enum AccountStatus {
     Expired = 3,
 }
 
-#[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
     Initialized,
@@ -47,7 +46,7 @@ pub fn get_creator(env: &Env) -> Address {
     env.storage().instance().get(&DataKey::Creator).unwrap()
 }
 
-// Expiry ledger
+// Expiry
 pub fn set_expiry_ledger(env: &Env, ledger: u32) {
     env.storage()
         .instance()

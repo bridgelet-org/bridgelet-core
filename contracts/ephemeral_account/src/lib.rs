@@ -10,7 +10,7 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Ve
 
 pub use errors::Error;
 pub use events::{
-    AccountCreated, AccountExpired, MultiPaymentReceived, PaymentReceived, SweepExecuted,
+    AccountCreated, AccountExpired, MultiPaymentReceived, PaymentReceived, SweepExecutedMulti,
 };
 pub use storage::{AccountStatus, DataKey, Payment};
 

@@ -2,6 +2,7 @@
 
 mod authorization;
 mod errors;
+mod storage;
 mod transfers;
 
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env};
@@ -15,6 +16,28 @@ pub struct SweepController;
 
 #[contractimpl]
 impl SweepController {
+    /// Initialize the sweep controller with authorized signer
+    ///
+    /// # Arguments
+    /// * `authorized_signer` - Ed25519 public key (32 bytes) that will authorize sweep operations
+    ///
+    /// # Errors
+    /// Returns Error::AuthorizationFailed if called more than once
+    pub fn initialize(env: Env, authorized_signer: BytesN<32>) -> Result<(), Error> {
+        // Check if already initialized
+        if storage::get_authorized_signer(&env).is_some() {
+            return Err(Error::AuthorizationFailed);
+        }
+
+        // Store the authorized signer public key
+        storage::set_authorized_signer(&env, &authorized_signer);
+
+        // Initialize the sweep nonce to 0
+        storage::init_sweep_nonce(&env);
+
+        Ok(())
+    }
+
     /// Execute sweep operation from ephemeral account to destination
     ///
     /// # Arguments
@@ -39,6 +62,9 @@ impl SweepController {
             auth_signature.clone(),
         );
         auth_ctx.verify(&env)?;
+
+        // Increment nonce after successful verification to prevent replay attacks
+        authorization::increment_nonce(&env);
 
         // Call ephemeral account contract to validate and authorize sweep
         // This triggers the account's sweep() method which updates state
