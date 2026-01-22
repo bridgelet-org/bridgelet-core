@@ -34,9 +34,7 @@ pub fn is_initialized(env: &Env) -> bool {
 }
 
 pub fn set_initialized(env: &Env, value: bool) {
-    env.storage()
-        .instance()
-        .set(&DataKey::Initialized, &value);
+    env.storage().instance().set(&DataKey::Initialized, &value);
 }
 
 // Creator
@@ -45,10 +43,7 @@ pub fn set_creator(env: &Env, creator: &Address) {
 }
 
 pub fn get_creator(env: &Env) -> Address {
-    env.storage()
-        .instance()
-        .get(&DataKey::Creator)
-        .unwrap()
+    env.storage().instance().get(&DataKey::Creator).unwrap()
 }
 
 // Expiry

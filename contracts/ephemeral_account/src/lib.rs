@@ -7,10 +7,11 @@ mod storage;
 mod test;
 
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Vec};
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Vec};
 
 pub use errors::Error;
-pub use events::{AccountCreated, AccountExpired, PaymentReceived, SweepExecutedMulti, MultiPaymentReceived};
+pub use events::{
+    AccountCreated, AccountExpired, MultiPaymentReceived, PaymentReceived, SweepExecutedMulti,
+};
 pub use storage::{AccountStatus, DataKey, Payment};
 
 #[contract]
@@ -228,7 +229,9 @@ impl EphemeralAccountContract {
         // Get total amount from all payments if any payments were received
         let total_amount = if storage::has_payment_received(&env) {
             let payments = storage::get_all_payments(&env);
-            payments.iter().fold(0, |sum, (_, payment)| sum + payment.amount)
+            payments
+                .iter()
+                .fold(0, |sum, (_, payment)| sum + payment.amount)
         } else {
             0
         };

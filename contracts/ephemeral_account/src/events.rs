@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, symbol_short, Address, Env, Vec};
 use crate::storage::Payment;
+use soroban_sdk::{contracttype, symbol_short, Address, Env, Vec};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
