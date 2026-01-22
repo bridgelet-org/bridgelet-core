@@ -1,5 +1,5 @@
-use soroban_sdk::{Address, BytesN, Env};
 use crate::errors::Error;
+use soroban_sdk::{Address, BytesN, Env};
 
 /// Verify sweep authorization signature
 pub fn verify_sweep_auth(

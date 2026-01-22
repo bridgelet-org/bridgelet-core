@@ -1,6 +1,6 @@
-use soroban_sdk::{Address, Env};
-use soroban_token_sdk::TokenClient;
 use crate::errors::Error;
+use soroban_sdk::token::TokenClient;
+use soroban_sdk::{Address, Env};
 
 /// Execute token transfer from ephemeral account to destination
 pub fn execute_transfer(
