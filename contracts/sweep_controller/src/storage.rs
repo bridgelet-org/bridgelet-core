@@ -7,6 +7,10 @@ pub enum DataKey {
     AuthorizedSigner,
     /// Current sweep nonce to prevent replay attacks
     SweepNonce,
+    /// Authorized destination address (optional, if set, sweeps can only go to this address)
+    AuthorizedDestination,
+    /// Creator address (the address that initialized the contract)
+    Creator,
 }
 
 /// Set the authorized signer public key
@@ -60,4 +64,59 @@ pub fn increment_sweep_nonce(env: &Env) {
     env.storage()
         .instance()
         .set(&DataKey::SweepNonce, &(current_nonce + 1));
+}
+
+/// Set the authorized destination address
+///
+/// # Arguments
+/// * `env` - Soroban environment
+/// * `destination` - Authorized destination address
+pub fn set_authorized_destination(env: &Env, destination: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::AuthorizedDestination, destination);
+}
+
+/// Get the authorized destination address
+///
+/// # Arguments
+/// * `env` - Soroban environment
+///
+/// # Returns
+/// The authorized destination address, or None if not set (flexible mode)
+pub fn get_authorized_destination(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::AuthorizedDestination)
+}
+
+/// Check if an authorized destination is set
+///
+/// # Arguments
+/// * `env` - Soroban environment
+///
+/// # Returns
+/// true if authorized destination is set (locked mode), false otherwise (flexible mode)
+pub fn has_authorized_destination(env: &Env) -> bool {
+    env.storage()
+        .instance()
+        .has(&DataKey::AuthorizedDestination)
+}
+
+/// Set the creator address (the address that initialized the contract)
+///
+/// # Arguments
+/// * `env` - Soroban environment
+/// * `creator` - Creator address
+pub fn set_creator(env: &Env, creator: &Address) {
+    env.storage().instance().set(&DataKey::Creator, creator);
+}
+
+/// Get the creator address
+///
+/// # Arguments
+/// * `env` - Soroban environment
+///
+/// # Returns
+/// The creator address, or None if not set
+pub fn get_creator(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::Creator)
 }
