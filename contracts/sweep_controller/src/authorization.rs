@@ -1,6 +1,6 @@
 use crate::errors::Error;
 use crate::storage;
-use soroban_sdk::{Address, BytesN, Env};
+use soroban_sdk::{xdr::ToXdr, Address, Bytes, BytesN, Env};
 
 /// Construct the message to be signed for sweep authorization
 ///
@@ -23,34 +23,47 @@ fn construct_sweep_message(
 
     // Construct the message by concatenating:
     // - destination (serialized as bytes)
-    // - nonce (as u64, 8 bytes)
+    // - nonce (as u64, 8 bytes)  
     // - contract_id (serialized as bytes)
-    let mut message = soroban_sdk::Vec::new(env);
-
-    // Add destination address bytes
+    
+    // Get XDR bytes for addresses
     let dest_bytes = destination.to_xdr(env);
-    for byte in dest_bytes.iter() {
-        message.push_back(byte);
-    }
-
-    // Add nonce bytes (big-endian u64)
-    message.push_back(((nonce >> 56) & 0xFF) as u8);
-    message.push_back(((nonce >> 48) & 0xFF) as u8);
-    message.push_back(((nonce >> 40) & 0xFF) as u8);
-    message.push_back(((nonce >> 32) & 0xFF) as u8);
-    message.push_back(((nonce >> 24) & 0xFF) as u8);
-    message.push_back(((nonce >> 16) & 0xFF) as u8);
-    message.push_back(((nonce >> 8) & 0xFF) as u8);
-    message.push_back((nonce & 0xFF) as u8);
-
-    // Add contract id bytes
     let contract_bytes = contract_id.to_xdr(env);
-    for byte in contract_bytes.iter() {
-        message.push_back(byte);
+    
+    // Build nonce bytes (big-endian u64) as BytesN<8> then convert to Bytes
+    let nonce_array = [
+        ((nonce >> 56) & 0xFF) as u8,
+        ((nonce >> 48) & 0xFF) as u8,
+        ((nonce >> 40) & 0xFF) as u8,
+        ((nonce >> 32) & 0xFF) as u8,
+        ((nonce >> 24) & 0xFF) as u8,
+        ((nonce >> 16) & 0xFF) as u8,
+        ((nonce >> 8) & 0xFF) as u8,
+        (nonce & 0xFF) as u8,
+    ];
+    let nonce_bytes_n = BytesN::from_array(env, &nonce_array);
+    let nonce_bytes: Bytes = nonce_bytes_n.into();
+    
+    // Build message by concatenating bytes
+    let mut message = Bytes::new(env);
+    
+    // Copy bytes into message one by one
+    let mut idx = 0u32;
+    for i in 0..dest_bytes.len() {
+        message.set(idx, dest_bytes.get(i).unwrap());
+        idx += 1;
+    }
+    for i in 0..nonce_bytes.len() {
+        message.set(idx, nonce_bytes.get(i).unwrap());
+        idx += 1;
+    }
+    for i in 0..contract_bytes.len() {
+        message.set(idx, contract_bytes.get(i).unwrap());
+        idx += 1;
     }
 
-    // Hash the message using SHA256
-    env.crypto().sha256(&message)
+    // Hash the message using SHA256 and convert to BytesN<32>
+    env.crypto().sha256(&message).into()
 }
 
 /// Verify sweep authorization signature using Ed25519
@@ -68,7 +81,7 @@ fn construct_sweep_message(
 /// Ok(()) if signature is valid, Error otherwise
 pub fn verify_sweep_auth(
     env: &Env,
-    account: &Address,
+    _account: &Address,
     destination: &Address,
     signature: &BytesN<64>,
 ) -> Result<(), Error> {
@@ -83,10 +96,18 @@ pub fn verify_sweep_auth(
     let message = construct_sweep_message(env, destination, &contract_id);
 
     // Verify the Ed25519 signature
-    env.crypto()
-        .ed25519_verify(&authorized_signer, &message, signature)
-        .map_err(|_| Error::SignatureVerificationFailed)?;
-
+    // ed25519_verify expects:
+    // - &BytesN<32> for public key
+    // - &Bytes for message (the hash)
+    // - &BytesN<64> for signature
+    // Convert message from BytesN<32> to Bytes
+    let message_bytes: Bytes = message.into();
+    
+    // ed25519_verify returns () and panics on failure
+    // In Soroban, panics are caught by the execution environment
+    // We'll call it directly - if it panics, the contract execution will fail
+    env.crypto().ed25519_verify(&authorized_signer, &message_bytes, signature);
+    
     Ok(())
 }
 

@@ -14,4 +14,5 @@ pub enum Error {
     SignatureVerificationFailed = 9,
     AuthorizedSignerNotSet = 10,
     InvalidNonce = 11,
+    UnauthorizedDestination = 13,
 }
