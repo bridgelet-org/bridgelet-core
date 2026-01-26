@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, BytesN, Env, Address};
+use soroban_sdk::{contracttype, Address, BytesN, Env};
 
 /// Data keys for contract storage
 #[contracttype]
@@ -20,7 +20,9 @@ pub enum DataKey {
 /// * `env` - Soroban environment
 /// * `signer` - Ed25519 public key (32 bytes)
 pub fn set_authorized_signer(env: &Env, signer: &BytesN<32>) {
-    env.storage().instance().set(&DataKey::AuthorizedSigner, signer);
+    env.storage()
+        .instance()
+        .set(&DataKey::AuthorizedSigner, signer);
 }
 
 /// Get the authorized signer public key
@@ -86,7 +88,9 @@ pub fn set_authorized_destination(env: &Env, destination: &Address) {
 /// # Returns
 /// The authorized destination address, or None if not set (flexible mode)
 pub fn get_authorized_destination(env: &Env) -> Option<Address> {
-    env.storage().instance().get(&DataKey::AuthorizedDestination)
+    env.storage()
+        .instance()
+        .get(&DataKey::AuthorizedDestination)
 }
 
 /// Check if an authorized destination is set

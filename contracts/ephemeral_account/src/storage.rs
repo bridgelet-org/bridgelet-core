@@ -1,21 +1,5 @@
+use bridgelet_shared::{AccountStatus, Payment};
 use soroban_sdk::{contracttype, Address, Env, Map};
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-#[contracttype]
-pub struct Payment {
-    pub asset: Address,
-    pub amount: i128,
-    pub timestamp: u64,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[contracttype]
-pub enum AccountStatus {
-    Active = 0,
-    PaymentReceived = 1,
-    Swept = 2,
-    Expired = 3,
-}
 
 #[contracttype]
 pub enum DataKey {

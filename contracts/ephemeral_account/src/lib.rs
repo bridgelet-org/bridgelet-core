@@ -6,13 +6,14 @@ mod storage;
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
+pub use bridgelet_shared::{AccountInfo, AccountStatus, Payment};
 pub use errors::Error;
 pub use events::{
     AccountCreated, AccountExpired, MultiPaymentReceived, PaymentReceived, SweepExecutedMulti,
 };
-pub use storage::{AccountStatus, DataKey, Payment};
+pub use storage::DataKey;
 
 #[contract]
 pub struct EphemeralAccountContract;
@@ -281,18 +282,4 @@ impl EphemeralAccountContract {
         // Future: Verify signature against authorized signer
         Ok(())
     }
-}
-
-/// Account information structure
-#[derive(Clone)]
-#[contracttype]
-pub struct AccountInfo {
-    pub creator: Address,
-    pub status: AccountStatus,
-    pub expiry_ledger: u32,
-    pub recovery_address: Address,
-    pub payment_received: bool,
-    pub payment_count: u32,
-    pub payments: Vec<Payment>,
-    pub swept_to: Option<Address>,
 }

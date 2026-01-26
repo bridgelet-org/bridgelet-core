@@ -1,4 +1,4 @@
-use crate::storage::Payment;
+use bridgelet_shared::Payment;
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Vec};
 
 #[contracttype]

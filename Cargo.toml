@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = [
+    "contracts/ephemeral_account",
+    "contracts/sweep_controller",
+    "contracts/shared",
+]
