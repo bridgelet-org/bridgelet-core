@@ -3,15 +3,14 @@
 mod authorization;
 mod errors;
 mod storage;
-mod transfers;
+// mod transfers;
 
 use crate::ephemeral_account::Client as EphemeralAccountClient;
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env};
 
 use authorization::AuthContext;
-use bridgelet_shared::{AccountInfo, AccountStatus};
+use bridgelet_shared::AccountStatus;
 pub use errors::Error;
-use transfers::TransferContext;
 
 #[contract]
 pub struct SweepController;
