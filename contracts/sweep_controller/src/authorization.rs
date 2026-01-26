@@ -1,6 +1,6 @@
 use crate::errors::Error;
 use crate::storage;
-use soroban_sdk::{Address, BytesN, Env};
+use soroban_sdk::{xdr::ToXdr, Address, BytesN, Env};
 
 /// Construct the message to be signed for sweep authorization
 ///
@@ -25,13 +25,11 @@ fn construct_sweep_message(
     // - destination (serialized as bytes)
     // - nonce (as u64, 8 bytes)
     // - contract_id (serialized as bytes)
-    let mut message = soroban_sdk::Vec::new(env);
+    let mut message = soroban_sdk::Bytes::new(env);
 
     // Add destination address bytes
     let dest_bytes = destination.to_xdr(env);
-    for byte in dest_bytes.iter() {
-        message.push_back(byte);
-    }
+    message.append(&dest_bytes);
 
     // Add nonce bytes (big-endian u64)
     message.push_back(((nonce >> 56) & 0xFF) as u8);
@@ -45,12 +43,10 @@ fn construct_sweep_message(
 
     // Add contract id bytes
     let contract_bytes = contract_id.to_xdr(env);
-    for byte in contract_bytes.iter() {
-        message.push_back(byte);
-    }
+    message.append(&contract_bytes);
 
     // Hash the message using SHA256
-    env.crypto().sha256(&message)
+    env.crypto().sha256(&message).into()
 }
 
 /// Verify sweep authorization signature using Ed25519
@@ -84,9 +80,8 @@ pub fn verify_sweep_auth(
 
     // Verify the Ed25519 signature
     env.crypto()
-        .ed25519_verify(&authorized_signer, &message, signature)
-        .map_err(|_| Error::SignatureVerificationFailed)?;
-
+        .ed25519_verify(&authorized_signer, &message.into(), signature);
+        
     Ok(())
 }
 

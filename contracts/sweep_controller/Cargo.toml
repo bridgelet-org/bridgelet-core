@@ -4,14 +4,18 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = "22.0.0"
+bridgelet-shared = { path = "../shared", version = "0.1.0" }
+
 soroban-token-sdk = "22.0.0"
 
 [dev-dependencies]
 soroban-sdk = { version = "22.0.0", features = ["testutils"] }
+ephemeral_account = { path = "../ephemeral_account" }
+
 
 [profile.release]
 opt-level = "z"

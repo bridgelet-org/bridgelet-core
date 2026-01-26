@@ -1,7 +1,8 @@
-use soroban_sdk::{BytesN, Env, Address};
+use soroban_sdk::{contracttype, BytesN, Env, Address};
 
 /// Data keys for contract storage
 #[derive(Clone)]
+#[contracttype]
 pub enum DataKey {
     /// Authorized signer public key (BytesN<32> for Ed25519)
     AuthorizedSigner,

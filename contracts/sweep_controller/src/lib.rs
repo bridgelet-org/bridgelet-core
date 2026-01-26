@@ -6,9 +6,11 @@ mod storage;
 mod transfers;
 
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env};
+use crate::ephemeral_account::Client as EphemeralAccountClient;
 
 use authorization::AuthContext;
 pub use errors::Error;
+use bridgelet_shared::{AccountInfo, AccountStatus};
 use transfers::TransferContext;
 
 #[contract]
@@ -68,7 +70,7 @@ impl SweepController {
 
         // Call ephemeral account contract to validate and authorize sweep
         // This triggers the account's sweep() method which updates state
-        let account_client = ephemeral_account::Client::new(&env, &ephemeral_account);
+        let account_client = EphemeralAccountClient::new(&env, &ephemeral_account);
 
         // The account contract validates state and authorizes the sweep
         account_client.sweep(&destination, &auth_signature);
@@ -81,7 +83,10 @@ impl SweepController {
             return Err(Error::AccountNotReady);
         }
 
-        let amount = info.payment_amount.ok_or(Error::AccountNotReady)?;
+        let amount = info.payments.iter().map(|p| p.amount).sum();
+        if amount == 0 {
+            return Err(Error::AccountNotReady);
+        }
 
         // Execute the actual token transfer
         // Note: In production, the ephemeral account would need to authorize this transfer
@@ -101,13 +106,13 @@ impl SweepController {
 
     /// Check if an account is ready for sweep
     pub fn can_sweep(env: Env, ephemeral_account: Address) -> bool {
-        let account_client = ephemeral_account::Client::new(&env, &ephemeral_account);
+        let account_client = EphemeralAccountClient::new(&env, &ephemeral_account);
 
         // Check if account exists and has payment
         let info = account_client.get_info();
 
         info.payment_received
-            && info.status == ephemeral_account::AccountStatus::PaymentReceived
+            && info.status as u32 == AccountStatus::PaymentReceived as u32
             && !account_client.is_expired()
     }
 }
@@ -137,6 +142,6 @@ mod ephemeral_account {
 
     // Import from the actual ephemeral_account contract
     soroban_sdk::contractimport!(
-        file = "../ephemeral_account/target/wasm32-unknown-unknown/release/ephemeral_account.wasm"
+        file = "/home/levai/bridgelet-core/target/wasm32-unknown-unknown/release/ephemeral_account.wasm"
     );
 }
