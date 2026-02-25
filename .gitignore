@@ -67,3 +67,9 @@ coverage/
 contract-ids.json
 deployed-contracts.json
 
+# Angetic config
+
+.agents/
+github/
+
+skills-lock.json
