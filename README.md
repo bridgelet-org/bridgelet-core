@@ -2,6 +2,10 @@
 
 **Soroban smart contracts for ephemeral account restrictions**
 
+**MVP Status**
+> 🚧 **MVP — Active Development:** Authorization and token transfer layers are not yet 
+> implemented on-chain. See [MVP Status](#mvp-status) for details.
+
 ## Overview
 
 Bridgelet Core contains the Soroban smart contracts that enforce single-use restrictions on ephemeral Stellar accounts and manage the sweep logic for transferring funds to permanent wallets.
@@ -44,6 +48,8 @@ contracts/
 │   │   ├── lib.rs
 │   │   ├── authorization.rs
 │   │   └── transfers.rs
+│   │   ├── storage.rs       # State management
+│   │   └── errors.rs        # Error types
 │   └── Cargo.toml
 └── shared/
 └── types.rs             # Shared types
@@ -96,8 +102,8 @@ pub trait EphemeralAccountInterface {
     fn initialize(
         env: Env,
         creator: Address,
-        sweep_destination: Option<Address>,
-        expiry_timestamp: u64
+        expiry_ledger: u32,
+        recovery_address: Address,
     ) -> Result<(), Error>;
     
     // Record inbound payment (called automatically)
@@ -110,6 +116,7 @@ pub trait EphemeralAccountInterface {
     fn is_expired(env: Env) -> bool;
 }
 ```
+> **⚠️ MVP:**  **authorization is not yet enforced on-chain.
 
 See [Bridgelet Documentation](https://github.com/bridgelet-org/bridgelet) for full API reference.
 
@@ -117,10 +124,10 @@ See [Bridgelet Documentation](https://github.com/bridgelet-org/bridgelet) for fu
 
 Contracts emit events for off-chain monitoring:
 ```rust
-AccountCreated { account_id, creator, expiry }
-PaymentReceived { account_id, amount, asset }
-SweepExecuted { account_id, destination, amount }
-AccountExpired { account_id }
+AccountCreated { creator, expiry_ledger }
+PaymentReceived { amount, asset }
+SweepExecutedMulti { destination, payments }
+AccountExpired { recovery_address, total_amount, reserve_amount }
 ```
 
 ## Security Considerations
