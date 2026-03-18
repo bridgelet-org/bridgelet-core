@@ -1,3 +1,4 @@
+use crate::events::ReserveReclaimed;
 use bridgelet_shared::{AccountStatus, Payment};
 use soroban_sdk::{contracttype, Address, Env, Map};
 
@@ -10,6 +11,12 @@ pub enum DataKey {
     Payments,
     Status,
     SweptTo,
+    BaseReserveRemaining,
+    AvailableReserve,
+    ReserveReclaimed,
+    LastSweepId,
+    ReserveEventCount,
+    LastReserveEvent,
 }
 
 // Initialization
@@ -112,4 +119,88 @@ pub fn set_swept_to(env: &Env, address: &Address) {
 
 pub fn get_swept_to(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::SweptTo)
+}
+
+// Reserve lifecycle
+pub fn init_reserve_tracking(env: &Env, base_reserve: i128) {
+    set_base_reserve_remaining(env, base_reserve);
+    set_available_reserve(env, base_reserve);
+    set_reserve_reclaimed(env, base_reserve == 0);
+    set_last_sweep_id(env, 0);
+    set_reserve_event_count(env, 0);
+}
+
+pub fn set_base_reserve_remaining(env: &Env, amount: i128) {
+    env.storage()
+        .instance()
+        .set(&DataKey::BaseReserveRemaining, &amount);
+}
+
+pub fn get_base_reserve_remaining(env: &Env) -> i128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::BaseReserveRemaining)
+        .unwrap_or(0)
+}
+
+pub fn set_available_reserve(env: &Env, amount: i128) {
+    env.storage()
+        .instance()
+        .set(&DataKey::AvailableReserve, &amount);
+}
+
+pub fn get_available_reserve(env: &Env) -> i128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::AvailableReserve)
+        .unwrap_or(0)
+}
+
+pub fn set_reserve_reclaimed(env: &Env, reclaimed: bool) {
+    env.storage()
+        .instance()
+        .set(&DataKey::ReserveReclaimed, &reclaimed);
+}
+
+pub fn is_reserve_reclaimed(env: &Env) -> bool {
+    env.storage()
+        .instance()
+        .get(&DataKey::ReserveReclaimed)
+        .unwrap_or(false)
+}
+
+pub fn set_last_sweep_id(env: &Env, sweep_id: u64) {
+    env.storage()
+        .instance()
+        .set(&DataKey::LastSweepId, &sweep_id);
+}
+
+pub fn get_last_sweep_id(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::LastSweepId)
+        .unwrap_or(0)
+}
+
+pub fn set_reserve_event_count(env: &Env, count: u32) {
+    env.storage()
+        .instance()
+        .set(&DataKey::ReserveEventCount, &count);
+}
+
+pub fn get_reserve_event_count(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::ReserveEventCount)
+        .unwrap_or(0)
+}
+
+pub fn set_last_reserve_event(env: &Env, event: &ReserveReclaimed) {
+    env.storage()
+        .instance()
+        .set(&DataKey::LastReserveEvent, event);
+}
+
+pub fn get_last_reserve_event(env: &Env) -> Option<ReserveReclaimed> {
+    env.storage().instance().get(&DataKey::LastReserveEvent)
 }

@@ -16,6 +16,8 @@ pub use events::{
 };
 pub use storage::DataKey;
 
+const BASE_RESERVE_STROOPS: i128 = 1_000_000_000;
+
 #[contract]
 pub struct EphemeralAccountContract;
 
@@ -56,6 +58,7 @@ impl EphemeralAccountContract {
         storage::set_expiry_ledger(&env, expiry_ledger);
         storage::set_recovery_address(&env, &recovery_address);
         storage::set_status(&env, AccountStatus::Active);
+        storage::init_reserve_tracking(&env, BASE_RESERVE_STROOPS);
 
         // Emit event
         events::emit_account_created(&env, creator, expiry_ledger);
@@ -167,17 +170,16 @@ impl EphemeralAccountContract {
         storage::set_status(&env, AccountStatus::Swept);
         storage::set_swept_to(&env, &destination);
 
-        // Note: Actual token transfers happen in the SDK via Stellar SDK
-        // This contract enforces the business logic and authorization
-        // The SDK will call this function, get approval, then execute all transfers atomically
-        // All transfers must succeed or the entire operation fails
+        // Note: Actual token transfers happen in the SDK via Stellar SDK.
+        // This contract enforces authorization/state transitions and reserve lifecycle.
+        let sweep_id = env.ledger().sequence() as u64;
+        storage::set_last_sweep_id(&env, sweep_id);
 
-        // Base reserve amount (1 XLM in stroops)
-        let reserve_amount = 1_000_000_000i128;
-
-        // Emit events for sweep execution and reserve reclamation
+        // Emit sweep event once transfer authorization/state update succeeds.
         events::emit_sweep_executed_multi(&env, destination.clone(), &payments_vec);
-        events::emit_reserve_reclaimed(&env, destination, reserve_amount);
+
+        // Reclaim base reserve only after successful sweep state transition.
+        Self::reclaim_reserve_to(&env, &destination, sweep_id)?;
 
         Ok(())
     }
@@ -235,21 +237,90 @@ impl EphemeralAccountContract {
         // Get total amount from all payments if any payments were received
         let total_amount = if storage::has_payment_received(&env) {
             let payments = storage::get_all_payments(&env);
-            payments
-                .iter()
-                .fold(0, |sum, (_, payment)| sum + payment.amount)
+            let mut total = 0i128;
+            for (_, payment) in payments.iter() {
+                total = total
+                    .checked_add(payment.amount)
+                    .ok_or(Error::InvalidAmount)?;
+            }
+            total
         } else {
             0
         };
 
-        // Base reserve amount (1 XLM in stroops)
-        let reserve_amount = 1_000_000_000i128;
+        let sweep_id = env.ledger().sequence() as u64;
+        storage::set_last_sweep_id(&env, sweep_id);
 
-        // Emit events for account expiration and reserve reclamation
-        events::emit_account_expired(&env, recovery_address.clone(), total_amount, reserve_amount);
-        events::emit_reserve_reclaimed(&env, recovery_address, reserve_amount);
+        // Reclaim reserve to recovery destination.
+        let reclaimed_reserve = Self::reclaim_reserve_to(&env, &recovery_address, sweep_id)?;
+
+        // Emit expiration event with reserve amount reclaimed in this call.
+        events::emit_account_expired(&env, recovery_address, total_amount, reclaimed_reserve);
 
         Ok(())
+    }
+
+    /// Reclaim remaining base reserve for a previously swept/expired account.
+    /// This is safe to call repeatedly: once fully reclaimed, subsequent calls transfer 0.
+    pub fn reclaim_reserve(env: Env) -> Result<i128, Error> {
+        if !storage::is_initialized(&env) {
+            return Err(Error::NotInitialized);
+        }
+
+        let status = storage::get_status(&env);
+        if status != AccountStatus::Swept && status != AccountStatus::Expired {
+            return Err(Error::InvalidStatus);
+        }
+
+        let destination = storage::get_swept_to(&env).ok_or(Error::InvalidStatus)?;
+        let sweep_id = storage::get_last_sweep_id(&env);
+
+        Self::reclaim_reserve_to(&env, &destination, sweep_id)
+    }
+
+    /// Remaining reserve amount (stroops) still eligible for reclaim.
+    pub fn get_reserve_remaining(env: Env) -> i128 {
+        if !storage::is_initialized(&env) {
+            return 0;
+        }
+
+        storage::get_base_reserve_remaining(&env)
+    }
+
+    /// Tracked reserve currently available for transfer (stroops).
+    pub fn get_reserve_available(env: Env) -> i128 {
+        if !storage::is_initialized(&env) {
+            return 0;
+        }
+
+        storage::get_available_reserve(&env)
+    }
+
+    /// Whether reserve has been fully reclaimed.
+    pub fn is_reserve_reclaimed(env: Env) -> bool {
+        if !storage::is_initialized(&env) {
+            return false;
+        }
+
+        storage::is_reserve_reclaimed(&env)
+    }
+
+    /// Last reserve reclaim event payload emitted by this contract.
+    pub fn get_last_reserve_event(env: Env) -> Option<ReserveReclaimed> {
+        if !storage::is_initialized(&env) {
+            return None;
+        }
+
+        storage::get_last_reserve_event(&env)
+    }
+
+    /// Number of reserve reclaim events emitted by this contract.
+    pub fn get_reserve_reclaim_event_count(env: Env) -> u32 {
+        if !storage::is_initialized(&env) {
+            return 0;
+        }
+
+        storage::get_reserve_event_count(&env)
     }
 
     /// Get account information
@@ -289,6 +360,74 @@ impl EphemeralAccountContract {
         // TODO: Implement proper signature verification
         // For MVP, we rely on off-chain SDK to only call with valid auth
         // Future: Verify signature against authorized signer
+        Ok(())
+    }
+
+    fn reclaim_reserve_to(env: &Env, destination: &Address, sweep_id: u64) -> Result<i128, Error> {
+        let reserve_remaining = storage::get_base_reserve_remaining(env);
+        let reserve_available = storage::get_available_reserve(env);
+
+        if reserve_remaining < 0 || reserve_available < 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        if reserve_remaining == 0 {
+            storage::set_reserve_reclaimed(env, true);
+            let event = ReserveReclaimed {
+                destination: destination.clone(),
+                amount: 0,
+                sweep_id,
+                fully_reclaimed: true,
+                remaining_reserve: 0,
+            };
+            Self::emit_and_store_reserve_event(env, event)?;
+            return Ok(0);
+        }
+
+        let reclaim_amount = if reserve_available < reserve_remaining {
+            reserve_available
+        } else {
+            reserve_remaining
+        };
+
+        let new_available = reserve_available
+            .checked_sub(reclaim_amount)
+            .ok_or(Error::InvalidAmount)?;
+        let new_remaining = reserve_remaining
+            .checked_sub(reclaim_amount)
+            .ok_or(Error::InvalidAmount)?;
+
+        storage::set_available_reserve(env, new_available);
+        storage::set_base_reserve_remaining(env, new_remaining);
+        storage::set_reserve_reclaimed(env, new_remaining == 0);
+
+        let event = ReserveReclaimed {
+            destination: destination.clone(),
+            amount: reclaim_amount,
+            sweep_id,
+            fully_reclaimed: new_remaining == 0,
+            remaining_reserve: new_remaining,
+        };
+        Self::emit_and_store_reserve_event(env, event)?;
+
+        Ok(reclaim_amount)
+    }
+
+    fn emit_and_store_reserve_event(env: &Env, event: ReserveReclaimed) -> Result<(), Error> {
+        events::emit_reserve_reclaimed(
+            env,
+            event.destination.clone(),
+            event.amount,
+            event.sweep_id,
+            event.fully_reclaimed,
+            event.remaining_reserve,
+        );
+
+        let event_count = storage::get_reserve_event_count(env);
+        let next_count = event_count.checked_add(1).ok_or(Error::InvalidAmount)?;
+        storage::set_last_reserve_event(env, &event);
+        storage::set_reserve_event_count(env, next_count);
+
         Ok(())
     }
 }

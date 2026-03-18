@@ -37,12 +37,14 @@ pub struct AccountExpired {
     pub reserve_amount: i128,
 }
 
-/// Reserve reclaimed event - emitted when base reserve is reclaimed
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReserveReclaimed {
     pub destination: Address,
     pub amount: i128,
+    pub sweep_id: u64,
+    pub fully_reclaimed: bool,
+    pub remaining_reserve: i128,
 }
 
 pub fn emit_account_created(env: &Env, creator: Address, expiry_ledger: u32) {
@@ -85,10 +87,20 @@ pub fn emit_account_expired(
     env.events().publish((symbol_short!("expired"),), event);
 }
 
-pub fn emit_reserve_reclaimed(env: &Env, destination: Address, amount: i128) {
+pub fn emit_reserve_reclaimed(
+    env: &Env,
+    destination: Address,
+    amount: i128,
+    sweep_id: u64,
+    fully_reclaimed: bool,
+    remaining_reserve: i128,
+) {
     let event = ReserveReclaimed {
         destination,
         amount,
+        sweep_id,
+        fully_reclaimed,
+        remaining_reserve,
     };
     env.events().publish((symbol_short!("reserve"),), event);
 }
