@@ -1,0 +1,59 @@
+name: Test Contracts
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: wasm32-unknown-unknown
+        override: true
+        
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+        
+    - name: Cache target directory
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+        
+    - name: Run tests
+      run: |
+        cd contracts/ephemeral_account
+        cargo test --verbose
+        
+    - name: Check format
+      run: |
+        cd contracts/ephemeral_account
+        cargo fmt -- --check
+        
+    - name: Run clippy
+      run: |
+        cd contracts/ephemeral_account
+        cargo clippy -- -D warnings
+        
+    - name: Build contracts
+      run: |
+        cd contracts/ephemeral_account
+        cargo build --target wasm32-unknown-unknown --release

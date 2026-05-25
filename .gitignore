@@ -1,0 +1,75 @@
+# Rust/Cargo
+/target/
+**/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# Soroban/Stellar
+.soroban/
+*.wasm
+*.optimized.wasm
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+*.secret
+*.key
+
+# IDE/Editor files
+.vscode/
+.idea/
+.qoder/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+
+# Build artifacts
+dist/
+build/
+out/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Node modules (if you have any JS tooling)
+node_modules/
+
+# test snapshots
+**/test_snapshots/
+
+# Test coverage
+coverage/
+*.lcov
+
+# Generated documentation (except architecture.md)
+
+
+# Contract deployment artifacts
+contract-ids.json
+deployed-contracts.json
+
+# Angetic config
+
+.agents/
+github/
+
+skills-lock.json
