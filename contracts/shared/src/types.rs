@@ -10,7 +10,7 @@ pub struct Payment {
 }
 // The current status of an ephemeral account.
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq, Copy)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Copy)]
 #[repr(u32)]
 pub enum AccountStatus {
     Active = 0,

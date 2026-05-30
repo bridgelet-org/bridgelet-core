@@ -6,5 +6,8 @@ edition = "2021"
 [dependencies]
 soroban-sdk = "22.0.0"
 
+[features]
+testutils = ["soroban-sdk/testutils"]
+
 [lib]
 crate-type = ["rlib"]
