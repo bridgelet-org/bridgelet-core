@@ -1,0 +1,20 @@
+[package]
+name = "account-factory"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+soroban-sdk = "22.0.0"
+bridgelet-shared = { path = "../shared" }
+ephemeral_account = { path = "../ephemeral_account" }
+
+[dev-dependencies]
+soroban-sdk = { version = "22.0.0", features = ["testutils"] }
+bridgelet-shared = { path = "../shared", features = ["testutils"] }
+ephemeral_account = { path = "../ephemeral_account", features = ["testutils"] }
+
+[features]
+testutils = ["soroban-sdk/testutils"]

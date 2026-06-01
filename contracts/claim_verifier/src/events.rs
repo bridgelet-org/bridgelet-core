@@ -9,6 +9,5 @@ pub struct VerificationSucceeded {
 
 pub fn emit_verification_succeeded(env: &Env, destination: Address, nonce: u64) {
     let event = VerificationSucceeded { destination, nonce };
-    env.events()
-        .publish((symbol_short!("verified"),), event);
+    env.events().publish((symbol_short!("verified"),), event);
 }

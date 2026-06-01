@@ -6,6 +6,7 @@ mod storage;
 #[cfg(test)]
 mod test;
 
+use claim_verifier::ClaimVerifierContractClient as ClaimVerifierClient;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
 pub use bridgelet_shared::{AccountInfo, AccountStatus, Payment};
@@ -37,6 +38,8 @@ impl EphemeralAccountContract {
         creator: Address,
         expiry_ledger: u32,
         recovery_address: Address,
+        native_transfer_address: Address,
+        claim_verifier_address: Address,
     ) -> Result<(), Error> {
         // Check if already initialized
         if storage::is_initialized(&env) {
@@ -57,6 +60,8 @@ impl EphemeralAccountContract {
         storage::set_creator(&env, &creator);
         storage::set_expiry_ledger(&env, expiry_ledger);
         storage::set_recovery_address(&env, &recovery_address);
+        storage::set_native_transfer_address(&env, &native_transfer_address);
+        storage::set_claim_verifier_address(&env, &claim_verifier_address);
         storage::set_status(&env, AccountStatus::Active);
         storage::init_reserve_tracking(&env, BASE_RESERVE_STROOPS);
 
@@ -352,17 +357,21 @@ impl EphemeralAccountContract {
 
     // Private helper functions
 
+    /// Verify sweep authorization via the claim_verifier contract.
+    /// Uses the current ledger sequence as the nonce.
     fn verify_sweep_authorization(
-        _env: &Env,
-        _destination: &Address,
-        _signature: &BytesN<64>,
+        env: &Env,
+        destination: &Address,
+        signature: &BytesN<64>,
     ) -> Result<(), Error> {
-        // ⚠️ MVP STUB: Signature verification is NOT enforced on-chain in this contract.
-        // Calling EphemeralAccount::sweep() directly bypasses all authorization checks.
-        // Authorization is only enforced when going through SweepController, which
-        // performs Ed25519 signature verification via authorization.rs.
-        // TODO: Implement on-chain signature verification against an authorized signer
-        // before production use.
+        let claim_verifier_address =
+            storage::get_claim_verifier_address(env).ok_or(Error::Unauthorized)?;
+
+        let verifier = ClaimVerifierClient::new(env, &claim_verifier_address);
+        let nonce = env.ledger().sequence() as u64;
+
+        verifier.verify(destination, &nonce, signature);
+
         Ok(())
     }
 

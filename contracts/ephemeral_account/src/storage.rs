@@ -8,6 +8,8 @@ pub enum DataKey {
     Creator,
     ExpiryLedger,
     RecoveryAddress,
+    NativeTransferAddress,
+    ClaimVerifierAddress,
     Payments,
     Status,
     SweptTo,
@@ -56,6 +58,22 @@ pub fn set_recovery_address(env: &Env, address: &Address) {
     env.storage()
         .instance()
         .set(&DataKey::RecoveryAddress, address);
+}
+
+pub fn set_native_transfer_address(env: &Env, address: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::NativeTransferAddress, address);
+}
+
+pub fn set_claim_verifier_address(env: &Env, address: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::ClaimVerifierAddress, address);
+}
+
+pub fn get_claim_verifier_address(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::ClaimVerifierAddress)
 }
 
 pub fn get_recovery_address(env: &Env) -> Address {

@@ -6,6 +6,6 @@ members = [
     "contracts/shared",
     "contracts/reserve_contract",
     "contracts/native_transfer",
-    "contracts/claim_verifier",    
-
+    "contracts/account_factory",
+    "contracts/claim_verifier",
 ]
