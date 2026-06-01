@@ -12,6 +12,9 @@ pub enum DataKey {
     AuthorizedDestination,
     /// Creator address (the address that initialized the contract)
     Creator,
+    NativeTransferAddress,
+    NativeAssetAddress,
+    ClaimVerifierAddress,
 }
 
 /// Set the authorized signer public key
@@ -124,4 +127,36 @@ pub fn set_creator(env: &Env, creator: &Address) {
 /// The creator address, or None if not set
 pub fn get_creator(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::Creator)
+}
+
+pub fn set_native_transfer_address(env: &Env, address: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::NativeTransferAddress, address);
+}
+
+pub fn get_native_transfer_address(env: &Env) -> Option<Address> {
+    env.storage()
+        .instance()
+        .get(&DataKey::NativeTransferAddress)
+}
+
+pub fn set_native_asset_address(env: &Env, address: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::NativeAssetAddress, address);
+}
+
+pub fn get_native_asset_address(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::NativeAssetAddress)
+}
+
+pub fn set_claim_verifier_address(env: &Env, address: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::ClaimVerifierAddress, address);
+}
+
+pub fn get_claim_verifier_address(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::ClaimVerifierAddress)
 }
