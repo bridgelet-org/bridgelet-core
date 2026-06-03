@@ -7,6 +7,7 @@ mod storage;
 mod test;
 
 use claim_verifier::ClaimVerifierContractClient as ClaimVerifierClient;
+use native_transfer::NativeTransferContractClient as NativeTransferClient;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
 pub use bridgelet_shared::{AccountInfo, AccountStatus, Payment};
@@ -63,6 +64,7 @@ impl EphemeralAccountContract {
         storage::set_native_transfer_address(&env, &native_transfer_address);
         storage::set_claim_verifier_address(&env, &claim_verifier_address);
         storage::set_status(&env, AccountStatus::Active);
+        storage::set_native_transfer_address(&env, &native_transfer_address);
         storage::init_reserve_tracking(&env, BASE_RESERVE_STROOPS);
 
         // Emit event
@@ -421,6 +423,17 @@ impl EphemeralAccountContract {
             remaining_reserve: new_remaining,
         };
         Self::emit_and_store_reserve_event(env, event)?;
+
+        if reclaim_amount > 0 {
+            let native_transfer_address =
+                storage::get_native_transfer_address(env).ok_or(Error::NotInitialized)?;
+            let native_client = NativeTransferClient::new(env, &native_transfer_address);
+            native_client.transfer(
+                &env.current_contract_address(),
+                destination,
+                &reclaim_amount,
+            );
+        }
 
         Ok(reclaim_amount)
     }

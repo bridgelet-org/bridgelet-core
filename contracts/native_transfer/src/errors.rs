@@ -5,4 +5,6 @@ use soroban_sdk::contracterror;
 pub enum Error {
     InvalidAmount = 1,
     TransferFailed = 2,
+    AlreadyInitialized = 3,
+    NotInitialized = 4,
 }

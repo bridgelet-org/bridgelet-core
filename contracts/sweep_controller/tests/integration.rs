@@ -33,11 +33,22 @@ fn test_initialize_sweep_controller() {
 
     let controller_id = env.register_contract(None, SweepController);
     let controller_client = SweepControllerClient::new(&env, &controller_id);
+    let creator = Address::generate(&env);
+    let native_transfer_address = Address::generate(&env);
+    let native_asset_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     let (authorized_signer, _) = generate_test_keypair();
 
     // Initialize controller with authorized signer (flexible mode - no destination)
-    controller_client.initialize(&authorized_signer, &None);
+    controller_client.initialize(
+        &authorized_signer,
+        &None,
+        &creator,
+        &native_transfer_address,
+        &native_asset_address,
+        &claim_verifier_address,
+    );
 }
 
 /// Test that re-initialization is prevented
@@ -48,15 +59,33 @@ fn test_initialize_prevents_double_init() {
 
     let controller_id = env.register_contract(None, SweepController);
     let controller_client = SweepControllerClient::new(&env, &controller_id);
+    let creator = Address::generate(&env);
+    let native_transfer_address = Address::generate(&env);
+    let native_asset_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     let (authorized_signer, _) = generate_test_keypair();
 
     // First initialization should succeed
-    controller_client.initialize(&authorized_signer, &None);
+    controller_client.initialize(
+        &authorized_signer,
+        &None,
+        &creator,
+        &native_transfer_address,
+        &native_asset_address,
+        &claim_verifier_address,
+    );
 
     // Second initialization should fail
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        controller_client.initialize(&authorized_signer, &None);
+        controller_client.initialize(
+            &authorized_signer,
+            &None,
+            &creator,
+            &native_transfer_address,
+            &native_asset_address,
+            &claim_verifier_address,
+        );
     }));
     assert!(result.is_err());
 }
@@ -70,9 +99,20 @@ fn test_execute_sweep_with_valid_signature() {
     // Deploy and initialize controller
     let controller_id = env.register_contract(None, SweepController);
     let controller_client = SweepControllerClient::new(&env, &controller_id);
+    let creator = Address::generate(&env);
+    let native_transfer_address = Address::generate(&env);
+    let native_asset_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     let (authorized_signer, _) = generate_test_keypair();
-    controller_client.initialize(&authorized_signer, &None);
+    controller_client.initialize(
+        &authorized_signer,
+        &None,
+        &creator,
+        &native_transfer_address,
+        &native_asset_address,
+        &claim_verifier_address,
+    );
 
     // Deploy ephemeral account
     let ephemeral_id = env.register_contract(None, EphemeralAccountContract);
@@ -84,9 +124,16 @@ fn test_execute_sweep_with_valid_signature() {
     let destination = Address::generate(&env);
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
+    let claim_verifier_address = Address::generate(&env);
 
     // Initialize ephemeral account
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    ephemeral_client.initialize(
+        &creator,
+        &expiry,
+        &recovery,
+        &native_transfer_address,
+        &claim_verifier_address,
+    );
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -112,9 +159,20 @@ fn test_execute_sweep_with_invalid_signature() {
     // Deploy and initialize controller
     let controller_id = env.register_contract(None, SweepController);
     let controller_client = SweepControllerClient::new(&env, &controller_id);
+    let creator = Address::generate(&env);
+    let native_transfer_address = Address::generate(&env);
+    let native_asset_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     let (authorized_signer, _) = generate_test_keypair();
-    controller_client.initialize(&authorized_signer, &None);
+    controller_client.initialize(
+        &authorized_signer,
+        &None,
+        &creator,
+        &native_transfer_address,
+        &native_asset_address,
+        &claim_verifier_address,
+    );
 
     // Deploy ephemeral account
     let ephemeral_id = env.register_contract(None, EphemeralAccountContract);
@@ -126,9 +184,17 @@ fn test_execute_sweep_with_invalid_signature() {
     let destination = Address::generate(&env);
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
+    let native_transfer_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     // Initialize ephemeral account
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    ephemeral_client.initialize(
+        &creator,
+        &expiry,
+        &recovery,
+        &native_transfer_address,
+        &claim_verifier_address,
+    );
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -165,9 +231,17 @@ fn test_sweep_without_payment() {
     let recovery = Address::generate(&env);
     let destination = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
+    let native_transfer_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     // Initialize but don't record payment
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    ephemeral_client.initialize(
+        &creator,
+        &expiry,
+        &recovery,
+        &native_transfer_address,
+        &claim_verifier_address,
+    );
 
     // Should panic - no payment received
     let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
@@ -183,9 +257,20 @@ fn test_nonce_increment_prevents_replay() {
     // Deploy and initialize controller
     let controller_id = env.register_contract(None, SweepController);
     let controller_client = SweepControllerClient::new(&env, &controller_id);
+    let creator = Address::generate(&env);
+    let native_transfer_address = Address::generate(&env);
+    let native_asset_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     let (authorized_signer, _) = generate_test_keypair();
-    controller_client.initialize(&authorized_signer, &None);
+    controller_client.initialize(
+        &authorized_signer,
+        &None,
+        &creator,
+        &native_transfer_address,
+        &native_asset_address,
+        &claim_verifier_address,
+    );
 
     // The nonce system is in place and will be incremented after each successful
     // authorization, making the same signature invalid for the next sweep operation
@@ -208,12 +293,20 @@ fn test_can_sweep() {
     let recovery = Address::generate(&env);
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
+    let native_transfer_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     // Should return false before initialization
     assert!(!controller_client.can_sweep(&ephemeral_id));
 
     // Initialize
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    ephemeral_client.initialize(
+        &creator,
+        &expiry,
+        &recovery,
+        &native_transfer_address,
+        &claim_verifier_address,
+    );
 
     // Should return false without payment
     assert!(!controller_client.can_sweep(&ephemeral_id));
@@ -234,9 +327,20 @@ fn test_wrong_signer_rejected() {
     // Deploy and initialize controller with authorized signer
     let controller_id = env.register_contract(None, SweepController);
     let controller_client = SweepControllerClient::new(&env, &controller_id);
+    let creator = Address::generate(&env);
+    let native_transfer_address = Address::generate(&env);
+    let native_asset_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     let (authorized_signer, _) = generate_test_keypair();
-    controller_client.initialize(&authorized_signer, &None);
+    controller_client.initialize(
+        &authorized_signer,
+        &None,
+        &creator,
+        &native_transfer_address,
+        &native_asset_address,
+        &claim_verifier_address,
+    );
 
     // Generate a different public key (wrong signer)
     let wrong_signer = BytesN::from_array(
@@ -258,9 +362,17 @@ fn test_wrong_signer_rejected() {
     let destination = Address::generate(&env);
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
+    let native_transfer_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     // Initialize ephemeral account
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    ephemeral_client.initialize(
+        &creator,
+        &expiry,
+        &recovery,
+        &native_transfer_address,
+        &claim_verifier_address,
+    );
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -293,9 +405,17 @@ fn test_unauthorized_signer_not_set() {
     let destination = Address::generate(&env);
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
+    let native_transfer_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     // Initialize ephemeral account
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    ephemeral_client.initialize(
+        &creator,
+        &expiry,
+        &recovery,
+        &native_transfer_address,
+        &claim_verifier_address,
+    );
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -319,9 +439,20 @@ fn test_initialize_with_authorized_destination() {
 
     let (authorized_signer, _) = generate_test_keypair();
     let authorized_dest = Address::generate(&env);
+    let creator = Address::generate(&env);
+    let native_transfer_address = Address::generate(&env);
+    let native_asset_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     // Initialize controller with authorized destination
-    controller_client.initialize(&authorized_signer, &Some(authorized_dest.clone()));
+    controller_client.initialize(
+        &authorized_signer,
+        &Some(authorized_dest.clone()),
+        &creator,
+        &native_transfer_address,
+        &native_asset_address,
+        &claim_verifier_address,
+    );
 }
 
 /// Test initialization without authorized destination (flexible mode)
@@ -334,9 +465,20 @@ fn test_initialize_without_authorized_destination() {
     let controller_client = SweepControllerClient::new(&env, &controller_id);
 
     let (authorized_signer, _) = generate_test_keypair();
+    let creator = Address::generate(&env);
+    let native_transfer_address = Address::generate(&env);
+    let native_asset_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     // Initialize controller without authorized destination (flexible mode)
-    controller_client.initialize(&authorized_signer, &None);
+    controller_client.initialize(
+        &authorized_signer,
+        &None,
+        &creator,
+        &native_transfer_address,
+        &native_asset_address,
+        &claim_verifier_address,
+    );
 }
 
 /// Test sweep to authorized destination (success)
@@ -348,10 +490,21 @@ fn test_sweep_to_authorized_destination() {
     // Deploy and initialize controller
     let controller_id = env.register_contract(None, SweepController);
     let controller_client = SweepControllerClient::new(&env, &controller_id);
+    let creator = Address::generate(&env);
+    let native_transfer_address = Address::generate(&env);
+    let native_asset_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     let (authorized_signer, _) = generate_test_keypair();
     let authorized_dest = Address::generate(&env);
-    controller_client.initialize(&authorized_signer, &Some(authorized_dest.clone()));
+    controller_client.initialize(
+        &authorized_signer,
+        &Some(authorized_dest.clone()),
+        &creator,
+        &native_transfer_address,
+        &native_asset_address,
+        &claim_verifier_address,
+    );
 
     // Deploy ephemeral account
     let ephemeral_id = env.register_contract(None, EphemeralAccountContract);
@@ -362,9 +515,17 @@ fn test_sweep_to_authorized_destination() {
     let recovery = Address::generate(&env);
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
+    let native_transfer_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     // Initialize ephemeral account
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    ephemeral_client.initialize(
+        &creator,
+        &expiry,
+        &recovery,
+        &native_transfer_address,
+        &claim_verifier_address,
+    );
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -391,7 +552,19 @@ fn test_sweep_to_unauthorized_destination() {
     let (authorized_signer, _) = generate_test_keypair();
     let authorized_dest = Address::generate(&env);
     let unauthorized_dest = Address::generate(&env);
-    controller_client.initialize(&authorized_signer, &Some(authorized_dest.clone()));
+    let creator = Address::generate(&env);
+    let native_transfer_address = Address::generate(&env);
+    let native_asset_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
+
+    controller_client.initialize(
+        &authorized_signer,
+        &Some(authorized_dest.clone()),
+        &creator,
+        &native_transfer_address,
+        &native_asset_address,
+        &claim_verifier_address,
+    );
 
     // Deploy ephemeral account
     let ephemeral_id = env.register_contract(None, EphemeralAccountContract);
@@ -402,9 +575,17 @@ fn test_sweep_to_unauthorized_destination() {
     let recovery = Address::generate(&env);
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
+    let native_transfer_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     // Initialize ephemeral account
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    ephemeral_client.initialize(
+        &creator,
+        &expiry,
+        &recovery,
+        &native_transfer_address,
+        &claim_verifier_address,
+    );
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -431,9 +612,20 @@ fn test_update_authorized_destination_by_creator() {
     let (authorized_signer, _) = generate_test_keypair();
     let initial_dest = Address::generate(&env);
     let new_dest = Address::generate(&env);
+    let creator = Address::generate(&env);
+    let native_transfer_address = Address::generate(&env);
+    let native_asset_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     // Initialize with authorized destination
-    controller_client.initialize(&authorized_signer, &Some(initial_dest.clone()));
+    controller_client.initialize(
+        &authorized_signer,
+        &Some(initial_dest.clone()),
+        &creator,
+        &native_transfer_address,
+        &native_asset_address,
+        &claim_verifier_address,
+    );
 
     // Update destination as creator (with mocked auth) - should succeed
     controller_client.update_authorized_destination(&new_dest);
@@ -452,10 +644,21 @@ fn test_update_authorized_destination_by_non_creator() {
     let (authorized_signer, _) = generate_test_keypair();
     let initial_dest = Address::generate(&env);
     let new_dest = Address::generate(&env);
+    let creator = Address::generate(&env);
+    let native_transfer_address = Address::generate(&env);
+    let native_asset_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     // Initialize with authorized destination
     // The invoker of initialize becomes the creator
-    controller_client.initialize(&authorized_signer, &Some(initial_dest.clone()));
+    controller_client.initialize(
+        &authorized_signer,
+        &Some(initial_dest.clone()),
+        &creator,
+        &native_transfer_address,
+        &native_asset_address,
+        &claim_verifier_address,
+    );
 
     // Try to update destination - should fail because current invoker != creator
     // (In tests, the invoker is typically the contract itself or test framework)
@@ -479,9 +682,20 @@ fn test_update_destination_before_sweep() {
     let (authorized_signer, _) = generate_test_keypair();
     let initial_dest = Address::generate(&env);
     let new_dest = Address::generate(&env);
+    let creator = Address::generate(&env);
+    let native_transfer_address = Address::generate(&env);
+    let native_asset_address = Address::generate(&env);
+    let claim_verifier_address = Address::generate(&env);
 
     // Initialize with authorized destination
-    controller_client.initialize(&authorized_signer, &Some(initial_dest.clone()));
+    controller_client.initialize(
+        &authorized_signer,
+        &Some(initial_dest.clone()),
+        &creator,
+        &native_transfer_address,
+        &native_asset_address,
+        &claim_verifier_address,
+    );
 
     // Update destination before any sweep - should succeed
     controller_client.update_authorized_destination(&new_dest);
@@ -491,12 +705,18 @@ fn test_update_destination_before_sweep() {
     let ephemeral_id = env.register_contract(None, EphemeralAccountContract);
     let ephemeral_client = EphemeralAccountContractClient::new(&env, &ephemeral_id);
 
-    let creator = Address::generate(&env);
     let recovery = Address::generate(&env);
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
 
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    ephemeral_client.initialize(
+        &creator,
+        &expiry,
+        &recovery,
+        &native_transfer_address,
+        &claim_verifier_address,
+    );
+
     ephemeral_client.record_payment(&100, &asset);
 
     let auth_sig = BytesN::from_array(&env, &[1u8; 64]);
