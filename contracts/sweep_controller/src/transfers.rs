@@ -1,43 +1,34 @@
 use crate::errors::Error;
+use bridgelet_shared::Payment;
 use soroban_sdk::token::TokenClient;
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, Env, Vec};
 
-/// Execute token transfer from ephemeral account to destination
-pub fn execute_transfer(
+/// Execute token transfers for all payments from the ephemeral account to the destination.
+///
+/// Iterates over each recorded payment and calls the SEP-41 token contract's
+/// `transfer()` function, moving funds from `from` to `destination`.
+///
+/// The ephemeral account must have already authorized this contract to transfer
+/// on its behalf — this is enforced by the Soroban auth model when `from.require_auth()`
+/// is satisfied by the ephemeral account's invocation context.
+///
+/// # Arguments
+/// * `env` - Soroban environment
+/// * `from` - Ephemeral account address (source of funds)
+/// * `destination` - Recipient wallet address
+/// * `payments` - All recorded payments to transfer
+///
+/// # Errors
+/// Returns `Error::TransferFailed` if any individual transfer fails
+pub fn execute_transfers(
     env: &Env,
-    token_address: &Address,
     from: &Address,
-    to: &Address,
-    amount: i128,
+    destination: &Address,
+    payments: &Vec<Payment>,
 ) -> Result<(), Error> {
-    // Create token client
-    let token = TokenClient::new(env, token_address);
-
-    // Execute transfer
-    token.transfer(from, to, &amount);
-
+    for payment in payments.iter() {
+        let token = TokenClient::new(env, &payment.asset);
+        token.transfer(from, destination, &payment.amount);
+    }
     Ok(())
-}
-
-/// Transfer context for sweep operations
-pub struct TransferContext {
-    pub asset: Address,
-    pub from: Address,
-    pub to: Address,
-    pub amount: i128,
-}
-
-impl TransferContext {
-    pub fn new(asset: Address, from: Address, to: Address, amount: i128) -> Self {
-        Self {
-            asset,
-            from,
-            to,
-            amount,
-        }
-    }
-
-    pub fn execute(&self, env: &Env) -> Result<(), Error> {
-        execute_transfer(env, &self.asset, &self.from, &self.to, self.amount)
-    }
 }

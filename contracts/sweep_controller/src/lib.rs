@@ -3,7 +3,7 @@
 mod authorization;
 mod errors;
 mod storage;
-// mod transfers;
+mod transfers;
 
 use ephemeral_account::EphemeralAccountContractClient as EphemeralAccountClient;
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env};
@@ -115,17 +115,16 @@ impl SweepController {
             return Err(Error::AccountNotReady);
         }
 
-        // Execute the actual token transfer
-        // Note: In production, the ephemeral account would need to authorize this transfer
-        // let transfer_ctx = TransferContext::new(
-        //     info.payment_asset,
-        //     ephemeral_account.clone(),
-        //     destination.clone(),
-        //     amount,
-        // );
-        // transfer_ctx.execute(&env)?;
+        // Execute the actual token transfers for all recorded payments
+        let mut payments_vec = soroban_sdk::Vec::new(&env);
+        for payment in info.payments.iter() {
+            payments_vec.push_back(payment);
+        }
 
-        // Emit sweep executed event
+        transfers::execute_transfers(&env, &ephemeral_account, &destination, &payments_vec)
+            .map_err(|_| Error::TransferFailed)?;
+
+        // Emit sweep completed event after successful transfer
         emit_sweep_completed(&env, ephemeral_account, destination, amount);
 
         Ok(())
