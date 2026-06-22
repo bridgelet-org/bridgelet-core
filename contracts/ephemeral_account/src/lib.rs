@@ -32,7 +32,6 @@ impl EphemeralAccountContract {
     ///
     /// # Errors
     /// Returns Error::AlreadyInitialized if called more than once
-
     pub fn initialize(
         env: Env,
         creator: Address,
