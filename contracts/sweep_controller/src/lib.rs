@@ -28,6 +28,7 @@ impl SweepController {
     /// Returns Error::AuthorizationFailed if called more than once
     pub fn initialize(
         env: Env,
+        creator: Address,
         authorized_signer: BytesN<32>,
         authorized_destination: Option<Address>,
     ) -> Result<(), Error> {
@@ -36,11 +37,9 @@ impl SweepController {
             return Err(Error::AuthorizationFailed);
         }
 
-        // Store the creator address
-        // In Soroban SDK 22.0.0, we need to pass creator as a parameter
-        // For now, we'll use the contract address as a placeholder
-        // TODO: Update to accept creator as parameter if needed
-        let creator = env.current_contract_address();
+        // Require the creator to authorize this initialization
+        creator.require_auth();
+
         storage::set_creator(&env, &creator);
 
         // Store the authorized signer public key
