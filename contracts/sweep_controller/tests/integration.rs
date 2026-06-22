@@ -82,8 +82,8 @@ fn test_execute_sweep_with_valid_signature() {
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
 
-    // Initialize ephemeral account
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    // Initialize ephemeral account, authorizing this SweepController to call sweep()
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -125,8 +125,8 @@ fn test_execute_sweep_with_invalid_signature() {
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
 
-    // Initialize ephemeral account
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    // Initialize ephemeral account, authorizing this SweepController to call sweep()
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -153,7 +153,7 @@ fn test_sweep_without_payment() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let ephemeral_id = env.register(EphemeralAccountContract, ());
+let ephemeral_id = env.register(EphemeralAccountContract, ());
     let ephemeral_client = EphemeralAccountContractClient::new(&env, &ephemeral_id);
 
     let controller_id = env.register(SweepController, ());
@@ -165,7 +165,7 @@ fn test_sweep_without_payment() {
     let expiry = env.ledger().sequence() + 1000;
 
     // Initialize but don't record payment
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
 
     // Should panic - no payment received
     let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
@@ -211,8 +211,8 @@ fn test_can_sweep() {
     // Should return false before initialization
     assert!(!controller_client.can_sweep(&ephemeral_id));
 
-    // Initialize
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    // Initialize, authorizing this SweepController to call sweep()
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
 
     // Should return false without payment
     assert!(!controller_client.can_sweep(&ephemeral_id));
@@ -259,8 +259,8 @@ fn test_wrong_signer_rejected() {
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
 
-    // Initialize ephemeral account
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    // Initialize ephemeral account, authorizing this SweepController to call sweep()
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -294,8 +294,8 @@ fn test_unauthorized_signer_not_set() {
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
 
-    // Initialize ephemeral account
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    // Initialize ephemeral account, authorizing this (uninitialized) SweepController to call sweep()
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -366,8 +366,8 @@ fn test_sweep_to_authorized_destination() {
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
 
-    // Initialize ephemeral account
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    // Initialize ephemeral account, authorizing this SweepController to call sweep()
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -407,8 +407,8 @@ fn test_sweep_to_unauthorized_destination() {
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
 
-    // Initialize ephemeral account
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    // Initialize ephemeral account, authorizing this SweepController to call sweep()
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -503,7 +503,7 @@ fn test_update_destination_before_sweep() {
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
 
-    ephemeral_client.initialize(&creator, &expiry, &recovery);
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
     ephemeral_client.record_payment(&100, &asset);
 
     let auth_sig = BytesN::from_array(&env, &[1u8; 64]);
