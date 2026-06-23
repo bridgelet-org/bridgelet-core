@@ -1,59 +1,63 @@
-name: Test Contracts
+name: Test Contracts (legacy – see ci.yml)
+
+# NOTE: This file is superseded by ci.yml which covers the full workspace.
+# Kept for backwards-compatibility with any branch-protection rules that
+# reference this specific workflow name.
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_TOOLCHAIN: "1.81.0"
+  CARGO_TERM_COLOR: always
 
 jobs:
-  test:
+  test-legacy:
+    name: Workspace Tests (legacy)
     runs-on: ubuntu-latest
-    
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        target: wasm32-unknown-unknown
-        override: true
-        
-    - name: Cache cargo registry
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        
-    - name: Cache cargo index
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-        
-    - name: Cache target directory
-      uses: actions/cache@v3
-      with:
-        path: target
-        key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
-        
-    - name: Run tests
-      run: |
-        cd contracts/ephemeral_account
-        cargo test --verbose
-        
-    - name: Check format
-      run: |
-        cd contracts/ephemeral_account
-        cargo fmt -- --check
-        
-    - name: Run clippy
-      run: |
-        cd contracts/ephemeral_account
-        cargo clippy -- -D warnings
-        
-    - name: Build contracts
-      run: |
-        cd contracts/ephemeral_account
-        cargo build --target wasm32-unknown-unknown --release
+      - uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+
+      - name: Run all workspace tests
+        run: cargo test --workspace --verbose
+
+      - name: Check format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Build all WASM contracts
+        run: |
+          for contract in ephemeral_account reserve_contract sweep_controller; do
+            echo "Building $contract …"
+            cd contracts/$contract
+            cargo build --target wasm32-unknown-unknown --release
+            cd ../..
+          done

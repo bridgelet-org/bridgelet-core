@@ -5,6 +5,7 @@ This document explains how to run tests, write new tests, and understand the tes
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [CI Pipeline (GitHub Actions)](#ci-pipeline-github-actions)
 - [Running Tests](#running-tests)
 - [Testing Strategy](#testing-strategy)
 - [Writing Tests](#writing-tests)
@@ -14,12 +15,94 @@ This document explains how to run tests, write new tests, and understand the tes
 ## Quick Start
 
 ```bash
-# Run all tests
+# Run all workspace tests
 ./scripts/test.sh
 
-# Or run tests for a specific contract
-cd contracts/ephemeral_account && cargo test
-cd contracts/sweep_controller && cargo test
+# Run tests for a single contract
+./scripts/test.sh ephemeral_account
+./scripts/test.sh sweep_controller
+
+# Build all WASM artifacts
+./scripts/build.sh
+
+# Build a single contract
+./scripts/build.sh reserve_contract
+```
+
+---
+
+## CI Pipeline (GitHub Actions)
+
+The repository ships two workflow files in `.github/workflows/`:
+
+| File | Purpose |
+|------|---------|
+| `ci.yml` | **Canonical CI** – full quality gate for every push/PR to `main` |
+| `test.yml` | Legacy compatibility shim – runs the same workspace tests |
+
+### ci.yml – Job Overview
+
+```
+push / PR to main
+        │
+        ├─▶ lint        (rustfmt + clippy, parallel)
+        │
+        ├─▶ test        (cargo test for all workspace members, parallel)
+        │
+        └─▶ build       (WASM build + stellar contract optimize + artifact upload)
+                │
+                └─▶ sandbox    (docker-based Stellar local network smoke test)
+```
+
+#### Job: `lint`
+
+- Runs `cargo fmt --all -- --check`
+- Runs `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- Fast gate – runs in parallel with `test`
+
+#### Job: `test`
+
+- Tests each workspace member with `cargo test -p <crate> --verbose`
+- Members tested: `bridgelet-shared`, `ephemeral_account`, `reserve_contract`, `sweep_controller`
+- `sweep_controller` tests include integration tests in `tests/integration.rs`
+
+#### Job: `build` (depends on `test`)
+
+- Builds each contract: `cargo build --target wasm32-unknown-unknown --release`
+- Runs `stellar contract optimize` on each WASM
+- Uploads all WASM files as GitHub Actions artifact `bridgelet-wasm-<sha>` (retained 30 days)
+
+#### Job: `sandbox` (depends on `build`)
+
+- Starts `stellar/quickstart:testing` Docker container on port 8000
+- Creates and funds a `ci-test-account` via friendbot
+- Deploys `ephemeral_account.wasm` to the local sandbox
+- Invokes `get_status` as a smoke test
+- Tears down the container regardless of outcome
+
+### Pinned versions
+
+| Component | Version |
+|-----------|---------|
+| Rust toolchain | `1.81.0` |
+| stellar-cli | `22.0.0` |
+
+To update, change the `env:` block at the top of `ci.yml`.
+
+### Caching strategy
+
+All jobs share a Cargo cache keyed on `runner.os + RUST_TOOLCHAIN + Cargo.lock`.
+This avoids re-downloading crates between jobs while ensuring cache invalidation when
+dependencies change.
+
+### Downloading WASM artifacts
+
+```bash
+# Via GitHub CLI
+gh run download --name bridgelet-wasm-<sha>
+
+# Via UI
+# Actions tab → select run → Artifacts section → bridgelet-wasm-<sha>
 ```
 
 ## Running Tests

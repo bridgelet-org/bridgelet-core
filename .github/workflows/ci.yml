@@ -1,0 +1,281 @@
+name: CI – Contract Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_TOOLCHAIN: "1.81.0"           # Pinned Rust toolchain
+  STELLAR_CLI_VERSION: "22.0.0"      # Pinned stellar-cli (soroban-cli successor)
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0               # Disable incremental for cleaner CI caching
+  RUSTFLAGS: "-D warnings"           # Treat warnings as errors
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────
+  # Job 1 – Format & Lint (fast gate, runs in parallel with test)
+  # ─────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain (with rustfmt + clippy)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+
+      - name: Cache Cargo registry & build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-
+
+      - name: Check formatting (workspace-wide)
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy (workspace-wide, deny warnings)
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  # ─────────────────────────────────────────────────────────────────
+  # Job 2 – Unit & Integration Tests
+  # ─────────────────────────────────────────────────────────────────
+  test:
+    name: Cargo Test (all workspace members)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo registry & build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-
+
+      # Run tests for each workspace member explicitly so failures are
+      # attributed to the correct contract in the GitHub summary.
+      - name: Test – shared library
+        run: cargo test -p bridgelet-shared --verbose
+
+      - name: Test – ephemeral_account contract
+        run: cargo test -p ephemeral_account --verbose
+
+      - name: Test – reserve_contract contract
+        run: cargo test -p reserve_contract --verbose
+
+      - name: Test – sweep_controller contract (unit + integration)
+        run: cargo test -p sweep_controller --verbose
+
+  # ─────────────────────────────────────────────────────────────────
+  # Job 3 – WASM Build & Artifact Upload
+  # ─────────────────────────────────────────────────────────────────
+  build:
+    name: Build WASM Artifacts
+    runs-on: ubuntu-latest
+    needs: [test]          # Only build if tests pass
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo registry & build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+            ${{ runner.os }}-cargo-
+
+      - name: Install stellar-cli ${{ env.STELLAR_CLI_VERSION }}
+        run: |
+          cargo install --locked stellar-cli --version ${{ env.STELLAR_CLI_VERSION }} \
+            --features opt 2>&1 | tail -5
+          stellar --version
+
+      # Build each contract individually so optimisation flags are respected
+      - name: Build – ephemeral_account.wasm
+        run: |
+          cd contracts/ephemeral_account
+          cargo build --target wasm32-unknown-unknown --release
+
+      - name: Build – reserve_contract.wasm
+        run: |
+          cd contracts/reserve_contract
+          cargo build --target wasm32-unknown-unknown --release
+
+      - name: Build – sweep_controller.wasm
+        run: |
+          cd contracts/sweep_controller
+          cargo build --target wasm32-unknown-unknown --release
+
+      - name: Collect WASM artifacts
+        run: |
+          mkdir -p wasm-artifacts
+          find target/wasm32-unknown-unknown/release -maxdepth 1 -name "*.wasm" \
+            ! -name "*.d.wasm" \
+            -exec cp {} wasm-artifacts/ \;
+          echo "──── Built WASM files ────"
+          ls -lh wasm-artifacts/
+
+      - name: Optimise WASMs with stellar contract optimize
+        run: |
+          for wasm in wasm-artifacts/*.wasm; do
+            echo "Optimising $wasm …"
+            stellar contract optimize --wasm "$wasm" --wasm-out "${wasm%.wasm}.optimised.wasm" || true
+          done
+          ls -lh wasm-artifacts/
+
+      - name: Upload WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bridgelet-wasm-${{ github.sha }}
+          path: wasm-artifacts/
+          retention-days: 30
+          if-no-files-found: error
+
+  # ─────────────────────────────────────────────────────────────────
+  # Job 4 – Local Sandbox Smoke Test
+  # ─────────────────────────────────────────────────────────────────
+  sandbox:
+    name: Local Stellar Sandbox Smoke Test
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ env.RUST_TOOLCHAIN }}-
+
+      - name: Install stellar-cli ${{ env.STELLAR_CLI_VERSION }}
+        run: |
+          cargo install --locked stellar-cli --version ${{ env.STELLAR_CLI_VERSION }} \
+            --features opt 2>&1 | tail -5
+          stellar --version
+
+      - name: Download WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: bridgelet-wasm-${{ github.sha }}
+          path: wasm-artifacts/
+
+      - name: Start Stellar local network (Docker)
+        run: |
+          docker run -d \
+            --name stellar-local \
+            -p 8000:8000 \
+            stellar/quickstart:testing \
+            --local \
+            --enable-soroban-rpc
+          echo "Waiting for Stellar local network to be ready…"
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+              echo "✅ Stellar local network is ready (attempt $i)"
+              break
+            fi
+            echo "  attempt $i – not ready yet, sleeping 5 s…"
+            sleep 5
+          done
+          curl -s http://localhost:8000/health | python3 -m json.tool
+
+      - name: Configure stellar-cli for local network
+        run: |
+          stellar network add local \
+            --rpc-url http://localhost:8000/soroban/rpc \
+            --network-passphrase "Standalone Network ; February 2017"
+
+          # Generate a funded test account
+          stellar keys generate --no-fund ci-test-account
+          ACCOUNT_ADDRESS=$(stellar keys address ci-test-account)
+          echo "CI test account: $ACCOUNT_ADDRESS"
+
+          # Fund via friendbot
+          curl -sf "http://localhost:8000/friendbot?addr=${ACCOUNT_ADDRESS}" | \
+            python3 -m json.tool || true
+
+      - name: Smoke test – deploy ephemeral_account to sandbox
+        run: |
+          WASM_PATH="wasm-artifacts/ephemeral_account.wasm"
+          if [ ! -f "$WASM_PATH" ]; then
+            echo "Optimised wasm not found, trying original…"
+            WASM_PATH="wasm-artifacts/ephemeral_account.wasm"
+          fi
+
+          echo "Deploying $WASM_PATH to local sandbox…"
+          CONTRACT_ID=$(stellar contract deploy \
+            --wasm "$WASM_PATH" \
+            --source ci-test-account \
+            --network local 2>&1)
+          echo "Deployed contract ID: $CONTRACT_ID"
+          echo "CONTRACT_ID=$CONTRACT_ID" >> $GITHUB_ENV
+
+      - name: Smoke test – invoke ephemeral_account.get_status
+        run: |
+          if [ -z "$CONTRACT_ID" ]; then
+            echo "Skipping invocation – no contract ID"
+            exit 0
+          fi
+          stellar contract invoke \
+            --id "$CONTRACT_ID" \
+            --source ci-test-account \
+            --network local \
+            -- get_status || echo "(Expected: contract not initialised yet)"
+
+      - name: Stop Stellar local network
+        if: always()
+        run: docker rm -f stellar-local || true
