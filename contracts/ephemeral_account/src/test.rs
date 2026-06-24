@@ -8,7 +8,8 @@ mod test {
     };
     use soroban_sdk::testutils::storage::Instance;
     use soroban_sdk::testutils::Ledger;
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
+    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::{Address, BytesN, Env};
 
     const BASE_RESERVE_STROOPS: i128 = 1_000_000_000;
 
