@@ -19,6 +19,8 @@ pub enum DataKey {
     LastReserveEvent,
     AuthorizedController,
     ContractVersion,
+    /// Relayer address authorized to call record_payment().
+    Relayer,
 }
 
 // Initialization
@@ -230,4 +232,13 @@ pub fn set_authorized_controller(env: &Env, controller: &Address) {
 
 pub fn get_authorized_controller(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::AuthorizedController)
+}
+
+// Relayer — the only address authorized to call record_payment()
+pub fn set_relayer(env: &Env, relayer: &Address) {
+    env.storage().instance().set(&DataKey::Relayer, relayer);
+}
+
+pub fn get_relayer(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::Relayer)
 }

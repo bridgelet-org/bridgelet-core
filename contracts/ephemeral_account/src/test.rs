@@ -28,9 +28,10 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+                let relayer = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
 
         assert_eq!(client.get_status(), AccountStatus::Active);
         assert!(!client.is_expired());
@@ -50,9 +51,10 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+                let relayer = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
 
         assert_eq!(client.version(), 1);
     }
@@ -68,10 +70,11 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+                let relayer = Address::generate(&env);
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         client.record_payment(&100, &asset);
 
         assert_eq!(client.get_status(), AccountStatus::PaymentReceived);
@@ -88,11 +91,12 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+                let relayer = Address::generate(&env);
         let asset1 = Address::generate(&env);
         let asset2 = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
 
         client.record_payment(&100, &asset1);
         let info = client.get_info();
@@ -116,11 +120,12 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+                let relayer = Address::generate(&env);
         let asset = Address::generate(&env);
         let destination = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         client.record_payment(&100, &asset);
 
         let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
@@ -150,10 +155,11 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+                let relayer = Address::generate(&env);
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         client.record_payment(&100, &asset);
         client.record_payment(&50, &asset);
     }
@@ -169,9 +175,10 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+                let relayer = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
 
         for i in 0..10 {
             let asset = Address::generate(&env);
@@ -193,10 +200,11 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+                let relayer = Address::generate(&env);
         let destination = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
 
         let asset1 = Address::generate(&env);
         let asset2 = Address::generate(&env);
@@ -229,11 +237,12 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+                let relayer = Address::generate(&env);
         let destination = Address::generate(&env);
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         client.record_payment(&100, &asset);
 
         let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
@@ -265,11 +274,12 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+                let relayer = Address::generate(&env);
         let destination = Address::generate(&env);
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         client.record_payment(&100, &asset);
 
         let initial_available = 250_000_000i128;
@@ -322,11 +332,12 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+                let relayer = Address::generate(&env);
         let destination = Address::generate(&env);
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         client.record_payment(&100, &asset);
 
         let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
@@ -358,10 +369,11 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+                let relayer = Address::generate(&env);
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 10;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         client.record_payment(&500, &asset);
 
         // Advance ledger past expiry
@@ -391,9 +403,10 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+                let relayer = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
 
         // Attempt to expire before expiry ledger — should return NotExpired (#6)
         client.expire();
@@ -411,11 +424,12 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+                let relayer = Address::generate(&env);
         let asset = Address::generate(&env);
         let destination = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         client.record_payment(&100, &asset);
 
         let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
@@ -423,5 +437,35 @@ mod test {
 
         // Second sweep attempt — should return AlreadySwept (#7)
         client.sweep(&destination, &auth_sig);
+    }
+
+    #[test]
+    fn test_record_payment_relayer_required() {
+        let env = Env::default();
+        // Do NOT mock all auths — we want to verify relayer.require_auth() is enforced
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
+
+        // With mock_all_auths, the call succeeds — auth infrastructure is wired up
+        client.record_payment(&100, &asset);
+        assert_eq!(client.get_status(), AccountStatus::PaymentReceived);
+
+        // Verify the relayer auth was required by inspecting recorded auths
+        let auths = env.auths();
+        let relayer_auth = auths
+            .iter()
+            .any(|(addr, _)| *addr == relayer);
+        assert!(relayer_auth, "relayer.require_auth() must be called in record_payment");
     }
 }
