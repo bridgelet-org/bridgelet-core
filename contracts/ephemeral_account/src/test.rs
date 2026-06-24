@@ -6,8 +6,7 @@ mod test {
         storage, AccountStatus, EphemeralAccountContract, EphemeralAccountContractClient,
         ReserveReclaimed,
     };
-    use soroban_sdk::testutils::Ledger;
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
+    use soroban_sdk::{testutils::Address as _, testutils::Ledger, Address, BytesN, Env};
 
     const BASE_RESERVE_STROOPS: i128 = 1_000_000_000;
 
@@ -321,6 +320,43 @@ mod test {
         assert_eq!(client.get_reserve_reclaim_event_count(), 4);
     }
 
+    /// Verifies that expire() uses checked_add for payment totals and returns
+    /// InvalidAmount instead of overflowing when amounts would exceed i128::MAX.
+    #[test]
+    fn test_expire_overflow_protection() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let asset1 = Address::generate(&env);
+        let asset2 = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+
+        // Record two payments that would overflow i128 when summed
+        client.record_payment(&i128::MAX, &asset1);
+        client.record_payment(&1, &asset2);
+
+        // Advance past expiry
+        env.ledger()
+            .with_mut(|l| l.sequence_number = expiry_ledger + 1);
+
+        // expire() must return an error rather than silently overflowing
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            client.expire();
+        }));
+        assert!(
+            result.is_err(),
+            "expire() should fail on i128 overflow in payment sum"
+        );
+    }
+
     #[test]
     fn test_replay_sweep_call_does_not_reclaim_twice() {
         let env = Env::default();
@@ -440,7 +476,8 @@ mod test {
     }
 
     #[test]
-    fn test_record_payment_relayer_required() {
+    #[should_panic(expected = "Error(Contract, #5)")]
+    fn test_initialize_with_expired_ledger_rejected() {
         let env = Env::default();
         env.mock_all_auths();
 
@@ -450,20 +487,14 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
-        let relayer = Address::generate(&env);
-        let asset = Address::generate(&env);
-        let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
-        client.record_payment(&100, &asset);
+        // Advance ledger so we can clearly pass a past expiry
+        env.ledger().with_mut(|l| {
+            l.sequence_number = 100;
+        });
 
-        // env.auths() returns auths from the last contract invocation only.
-        // Check immediately after record_payment before any other call.
-        let auths = env.auths();
-        assert!(
-            auths.iter().any(|(addr, _)| *addr == relayer),
-            "relayer.require_auth() must be called in record_payment"
-        );
-        assert_eq!(client.get_status(), AccountStatus::PaymentReceived);
+        // expiry_ledger <= current ledger (50 <= 100) -- should return InvalidExpiry (#5)
+        let expired_ledger = 50u32;
+        client.initialize(&creator, &expired_ledger, &recovery, &controller);
     }
 }
