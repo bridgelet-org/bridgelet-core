@@ -532,6 +532,34 @@ mod test {
     }
 
     #[test]
+    fn test_get_status_lifecycle() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let destination = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        assert_eq!(client.get_status(), AccountStatus::Active);
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        assert_eq!(client.get_status(), AccountStatus::Active);
+
+        client.record_payment(&100, &asset);
+        assert_eq!(client.get_status(), AccountStatus::PaymentReceived);
+
+        let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
+        client.sweep(&destination, &auth_sig);
+        assert_eq!(client.get_status(), AccountStatus::Swept);
+    }
+
+    #[test]
     fn test_ttl_extended_after_get_status() {
         let env = create_env();
         env.mock_all_auths();
