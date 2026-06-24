@@ -35,7 +35,7 @@ mod test {
         Bytes::from(hash).copy_into_slice(&mut hash_arr);
 
         let sig = sk.sign(&hash_arr);
-        BytesN::from_array(env, sig.to_bytes().as_ref())
+        BytesN::from_array(env, &sig.to_bytes())
     }
 
     fn latest_reserve_event(client: &EphemeralAccountContractClient) -> ReserveReclaimed {
