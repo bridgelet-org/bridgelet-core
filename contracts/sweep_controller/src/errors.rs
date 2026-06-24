@@ -15,4 +15,5 @@ pub enum Error {
     AuthorizedSignerNotSet = 10,
     InvalidNonce = 11,
     UnauthorizedDestination = 13,
+    Overflow = 14,
 }
