@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(warnings)]
 
 mod errors;
 mod events;
