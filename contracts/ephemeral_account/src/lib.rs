@@ -48,13 +48,7 @@ impl EphemeralAccountContract {
         // Verify creator authorization
         creator.require_auth();
 
-        // Validate expiry is in future
-        let current_ledger = env.ledger().sequence();
-        if expiry_ledger <= current_ledger {
-            return Err(Error::InvalidExpiry);
-        }
-
-        // Store initialization data
+        storage::extend_instance_ttl(&env);
         storage::set_initialized(&env, true);
         storage::set_creator(&env, &creator);
         storage::set_expiry_ledger(&env, expiry_ledger);
@@ -85,6 +79,8 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
+
+        storage::extend_instance_ttl(&env);
 
         // Validate amount
         if amount <= 0 {
@@ -143,6 +139,8 @@ impl EphemeralAccountContract {
             return Err(Error::NotInitialized);
         }
 
+        storage::extend_instance_ttl(&env);
+
         // Check not already swept
         if storage::get_status(&env) == AccountStatus::Swept {
             return Err(Error::AlreadySwept);
@@ -194,6 +192,8 @@ impl EphemeralAccountContract {
             return false;
         }
 
+        storage::extend_instance_ttl(&env);
+
         let expiry_ledger = storage::get_expiry_ledger(&env);
         let current_ledger = env.ledger().sequence();
 
@@ -202,6 +202,7 @@ impl EphemeralAccountContract {
 
     /// Get the contract version stored at initialization
     pub fn version(env: Env) -> u32 {
+        storage::extend_instance_ttl(&env);
         storage::get_contract_version(&env)
     }
 
@@ -211,6 +212,7 @@ impl EphemeralAccountContract {
             return AccountStatus::Active;
         }
 
+        storage::extend_instance_ttl(&env);
         storage::get_status(&env)
     }
 
@@ -224,6 +226,8 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
+
+        storage::extend_instance_ttl(&env);
 
         // Check not already swept or expired
         let status = storage::get_status(&env);
@@ -276,6 +280,8 @@ impl EphemeralAccountContract {
             return Err(Error::NotInitialized);
         }
 
+        storage::extend_instance_ttl(&env);
+
         let status = storage::get_status(&env);
         if status != AccountStatus::Swept && status != AccountStatus::Expired {
             return Err(Error::InvalidStatus);
@@ -293,6 +299,7 @@ impl EphemeralAccountContract {
             return 0;
         }
 
+        storage::extend_instance_ttl(&env);
         storage::get_base_reserve_remaining(&env)
     }
 
@@ -302,6 +309,7 @@ impl EphemeralAccountContract {
             return 0;
         }
 
+        storage::extend_instance_ttl(&env);
         storage::get_available_reserve(&env)
     }
 
@@ -311,6 +319,7 @@ impl EphemeralAccountContract {
             return false;
         }
 
+        storage::extend_instance_ttl(&env);
         storage::is_reserve_reclaimed(&env)
     }
 

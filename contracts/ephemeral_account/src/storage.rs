@@ -231,3 +231,26 @@ pub fn set_authorized_controller(env: &Env, controller: &Address) {
 pub fn get_authorized_controller(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::AuthorizedController)
 }
+
+// TTL management
+
+/// If the remaining TTL drops below this threshold (in ledgers), extend it.
+/// ~100 ledgers ≈ ~8 minutes — gives a comfortable buffer.
+const INSTANCE_TTL_THRESHOLD: u32 = 100;
+
+/// Extend the instance TTL to this many ledgers.
+/// 518 400 ledgers ≈ 30 days (at ~5 s per ledger).
+const INSTANCE_TTL_EXTEND_TO: u32 = 518_400;
+
+/// Proactively extend the instance storage TTL so the contract (and all
+/// its instance-stored data) does not get archived during periods of
+/// inactivity.
+///
+/// Should be called from **every** public entry-point (reads included)
+/// to guarantee the data stays alive as long as anyone interacts with
+/// the contract.
+pub fn extend_instance_ttl(env: &Env) {
+    env.storage()
+        .instance()
+        .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND_TO);
+}
