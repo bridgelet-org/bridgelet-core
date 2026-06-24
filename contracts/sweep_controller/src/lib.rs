@@ -40,6 +40,7 @@ impl SweepController {
         // Require the creator to authorize this initialization
         creator.require_auth();
 
+        storage::extend_instance_ttl(&env);
         storage::set_creator(&env, &creator);
 
         // Store the authorized signer public key
@@ -75,6 +76,8 @@ impl SweepController {
         destination: Address,
         auth_signature: BytesN<64>,
     ) -> Result<(), Error> {
+        storage::extend_instance_ttl(&env);
+
         // Validate destination if authorized destination is set (locked mode)
         if storage::has_authorized_destination(&env) {
             let authorized_dest =
@@ -132,6 +135,8 @@ impl SweepController {
 
     /// Check if an account is ready for sweep
     pub fn can_sweep(env: Env, ephemeral_account: Address) -> bool {
+        storage::extend_instance_ttl(&env);
+
         let account_client = EphemeralAccountClient::new(&env, &ephemeral_account);
 
         // Check if account exists and has payment
@@ -154,6 +159,8 @@ impl SweepController {
     /// Returns Error::AuthorizationFailed if caller is not the creator
     /// Returns Error::AccountAlreadySwept if a sweep has already been executed
     pub fn update_authorized_destination(env: Env, new_destination: Address) -> Result<(), Error> {
+        storage::extend_instance_ttl(&env);
+
         // Verify creator authorization
         let creator = storage::get_creator(&env).ok_or(Error::AuthorizationFailed)?;
         creator.require_auth();

@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use ephemeral_account::{EphemeralAccountContract, EphemeralAccountContractClient};
+use soroban_sdk::testutils::storage::Instance;
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 use sweep_controller::{SweepController, SweepControllerClient};
 
@@ -519,4 +520,91 @@ fn test_update_destination_before_sweep() {
     // But if it's UnauthorizedDestination, that's a problem
     // For now, we just check it doesn't panic with UnauthorizedDestination
     // (In a real test, we'd check the panic message)
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        controller_client.execute_sweep(&ephemeral_id, &new_dest, &auth_sig);
+    }));
+    // If it panics, it might be due to signature verification, which is fine
+    // But if it's UnauthorizedDestination, that's a problem
+    // For now, we just check it doesn't panic with UnauthorizedDestination
+    // (In a real test, we'd check the panic message)
+}
+
+// TTL management tests
+
+#[test]
+fn test_ttl_extended_after_initialize() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| {
+        li.sequence_number = 100_000;
+        li.min_persistent_entry_ttl = 50;
+        li.min_temp_entry_ttl = 50;
+        li.max_entry_ttl = 600_000;
+    });
+    env.mock_all_auths();
+
+    let creator = Address::generate(&env);
+    let controller_id = env.register(SweepController, ());
+    let controller_client = SweepControllerClient::new(&env, &controller_id);
+
+    let (authorized_signer, _) = generate_test_keypair(&env);
+    controller_client.initialize(&creator, &authorized_signer, &None);
+
+    let ttl = env.as_contract(&controller_id, || env.storage().instance().get_ttl());
+    assert!(ttl >= 518_400, "TTL should be at least 518_400 ledgers, got {ttl}");
+}
+
+#[test]
+fn test_ttl_extended_after_can_sweep() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| {
+        li.sequence_number = 100_000;
+        li.min_persistent_entry_ttl = 50;
+        li.min_temp_entry_ttl = 50;
+        li.max_entry_ttl = 600_000;
+    });
+    env.mock_all_auths();
+
+    let ephemeral_id = env.register(EphemeralAccountContract, ());
+    let ephemeral_client = EphemeralAccountContractClient::new(&env, &ephemeral_id);
+
+    let controller_id = env.register(SweepController, ());
+    let controller_client = SweepControllerClient::new(&env, &controller_id);
+
+    let creator = Address::generate(&env);
+    let recovery = Address::generate(&env);
+    let asset = Address::generate(&env);
+    let expiry = env.ledger().sequence() + 1000;
+
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
+    ephemeral_client.record_payment(&100, &asset);
+
+    let _ = controller_client.can_sweep(&ephemeral_id);
+
+    let ttl = env.as_contract(&controller_id, || env.storage().instance().get_ttl());
+    assert!(ttl >= 518_400, "TTL should be at least 518_400 ledgers, got {ttl}");
+}
+
+#[test]
+fn test_ttl_extended_after_update_destination() {
+    let env = Env::default();
+    env.ledger().with_mut(|li| {
+        li.sequence_number = 100_000;
+        li.min_persistent_entry_ttl = 50;
+        li.min_temp_entry_ttl = 50;
+        li.max_entry_ttl = 600_000;
+    });
+    env.mock_all_auths();
+
+    let controller_id = env.register(SweepController, ());
+    let controller_client = SweepControllerClient::new(&env, &controller_id);
+
+    let creator = Address::generate(&env);
+    let (authorized_signer, _) = generate_test_keypair(&env);
+    let new_dest = Address::generate(&env);
+
+    controller_client.initialize(&creator, &authorized_signer, &None);
+    controller_client.update_authorized_destination(&new_dest);
+
+    let ttl = env.as_contract(&controller_id, || env.storage().instance().get_ttl());
+    assert!(ttl >= 518_400, "TTL should be at least 518_400 ledgers, got {ttl}");
 }

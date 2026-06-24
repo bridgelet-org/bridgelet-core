@@ -6,6 +6,7 @@ mod test {
         storage, AccountStatus, EphemeralAccountContract, EphemeralAccountContractClient,
         ReserveReclaimed,
     };
+    use soroban_sdk::testutils::storage::Instance;
     use soroban_sdk::testutils::Ledger;
     use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
@@ -423,5 +424,129 @@ mod test {
 
         // Second sweep attempt — should return AlreadySwept (#7)
         client.sweep(&destination, &auth_sig);
+    }
+
+    // TTL management tests
+
+    /// Build a test `Env` with ledger settings that let TTL extension reach
+    /// `INSTANCE_TTL_EXTEND_TO` (518 400 ledgers) without being capped.
+    fn create_env() -> Env {
+        let env = Env::default();
+        env.ledger().with_mut(|li| {
+            li.sequence_number = 100_000;
+            li.min_persistent_entry_ttl = 50;
+            li.min_temp_entry_ttl = 50;
+            li.max_entry_ttl = 600_000;
+        });
+        env
+    }
+
+    /// Assert that the most recent contract call extended the instance TTL to
+    /// at least `INSTANCE_TTL_EXTEND_TO` (518 400 ledgers).
+    fn assert_ttl_extended(env: &Env, contract_id: &Address) {
+        let ttl = env.as_contract(contract_id, || env.storage().instance().get_ttl());
+        assert!(
+            ttl >= 518_400,
+            "TTL should be at least 518_400 ledgers, got {ttl}"
+        );
+    }
+
+    #[test]
+    fn test_ttl_extended_after_initialize() {
+        let env = create_env();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        assert_ttl_extended(&env, &contract_id);
+    }
+
+    #[test]
+    fn test_ttl_extended_after_record_payment() {
+        let env = create_env();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.record_payment(&100, &asset);
+
+        assert_ttl_extended(&env, &contract_id);
+    }
+
+    #[test]
+    fn test_ttl_extended_after_sweep() {
+        let env = create_env();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let destination = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.record_payment(&100, &asset);
+
+        let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
+        client.sweep(&destination, &auth_sig);
+
+        assert_ttl_extended(&env, &contract_id);
+    }
+
+    #[test]
+    fn test_ttl_extended_after_get_info() {
+        let env = create_env();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        let _ = client.get_info();
+
+        assert_ttl_extended(&env, &contract_id);
+    }
+
+    #[test]
+    fn test_ttl_extended_after_get_status() {
+        let env = create_env();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        let _ = client.get_status();
+
+        assert_ttl_extended(&env, &contract_id);
     }
 }

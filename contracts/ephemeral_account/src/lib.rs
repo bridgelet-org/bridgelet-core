@@ -329,6 +329,7 @@ impl EphemeralAccountContract {
             return None;
         }
 
+        storage::extend_instance_ttl(&env);
         storage::get_last_reserve_event(&env)
     }
 
@@ -338,6 +339,7 @@ impl EphemeralAccountContract {
             return 0;
         }
 
+        storage::extend_instance_ttl(&env);
         storage::get_reserve_event_count(&env)
     }
 
@@ -346,6 +348,8 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
+
+        storage::extend_instance_ttl(&env);
 
         let payments = storage::get_all_payments(&env);
         let payment_count = payments.len();
