@@ -110,7 +110,11 @@ impl SweepController {
             return Err(Error::AccountNotReady);
         }
 
-        let amount = info.payments.iter().map(|p| p.amount).sum();
+        let amount = info
+            .payments
+            .iter()
+            .try_fold(0i128, |acc, p| acc.checked_add(p.amount))
+            .ok_or(Error::Overflow)?;
         if amount == 0 {
             return Err(Error::AccountNotReady);
         }
