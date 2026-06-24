@@ -13,7 +13,15 @@ mod test {
             .get_last_reserve_event()
             .expect("reserve event was not emitted")
     }
-    fn setup(env: &Env) -> (Address, Address, Address, u32, EphemeralAccountContractClient) {
+    fn setup(
+        env: &Env,
+    ) -> (
+        Address,
+        Address,
+        Address,
+        u32,
+        EphemeralAccountContractClient,
+    ) {
         let contract_id = env.register(EphemeralAccountContract, ());
         let client = EphemeralAccountContractClient::new(env, &contract_id);
         let creator = Address::generate(env);
