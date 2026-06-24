@@ -63,14 +63,14 @@ Expire the account and return funds to the recovery address. Can only be called 
 fn expire(env: Env) -> Result<(), Error>
 ```
 
-#### `is_expired`
+#### `is_expireds`
 Checks if the account has passed its expiry ledger.
 
 ```rust
 fn is_expired(env: Env) -> bool
 ```
 
-#### `version`
+#### `versions`
 Returns the contract version stored at initialization. Useful for on-chain migration checks.
 
 ```rust
