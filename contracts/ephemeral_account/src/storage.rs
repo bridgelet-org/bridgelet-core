@@ -11,6 +11,9 @@ pub enum DataKey {
     Payments,
     Status,
     SweptTo,
+    /// Locked destination set on the first successful sweep call.
+    /// Any subsequent sweep attempt with a different address is rejected.
+    SweepDestination,
     BaseReserveRemaining,
     AvailableReserve,
     ReserveReclaimed,
@@ -25,7 +28,6 @@ pub enum DataKey {
 pub fn is_initialized(env: &Env) -> bool {
     env.storage().instance().has(&DataKey::Initialized)
 }
-
 pub fn set_initialized(env: &Env, value: bool) {
     env.storage().instance().set(&DataKey::Initialized, &value);
 }
@@ -34,7 +36,6 @@ pub fn set_initialized(env: &Env, value: bool) {
 pub fn set_creator(env: &Env, creator: &Address) {
     env.storage().instance().set(&DataKey::Creator, creator);
 }
-
 pub fn get_creator(env: &Env) -> Address {
     env.storage().instance().get(&DataKey::Creator).unwrap()
 }
@@ -45,7 +46,6 @@ pub fn set_expiry_ledger(env: &Env, ledger: u32) {
         .instance()
         .set(&DataKey::ExpiryLedger, &ledger);
 }
-
 pub fn get_expiry_ledger(env: &Env) -> u32 {
     env.storage()
         .instance()
@@ -59,7 +59,6 @@ pub fn set_recovery_address(env: &Env, address: &Address) {
         .instance()
         .set(&DataKey::RecoveryAddress, address);
 }
-
 pub fn get_recovery_address(env: &Env) -> Address {
     env.storage()
         .instance()
@@ -71,33 +70,27 @@ pub fn get_recovery_address(env: &Env) -> Address {
 pub fn has_payments(env: &Env) -> bool {
     env.storage().instance().has(&DataKey::Payments)
 }
-
 pub fn get_all_payments(env: &Env) -> Map<Address, Payment> {
     env.storage()
         .instance()
         .get(&DataKey::Payments)
         .unwrap_or_else(|| Map::new(env))
 }
-
 pub fn set_all_payments(env: &Env, payments: &Map<Address, Payment>) {
     env.storage().instance().set(&DataKey::Payments, payments);
 }
-
 pub fn add_payment(env: &Env, payment: Payment) {
     let mut payments = get_all_payments(env);
     payments.set(payment.asset.clone(), payment);
     set_all_payments(env, &payments);
 }
-
 pub fn get_payment(env: &Env, asset: &Address) -> Option<Payment> {
     let payments = get_all_payments(env);
     payments.get(asset.clone())
 }
-
 pub fn get_total_payments(env: &Env) -> u32 {
     get_all_payments(env).len()
 }
-
 pub fn has_payment_received(env: &Env) -> bool {
     has_payments(env)
 }
@@ -106,7 +99,6 @@ pub fn has_payment_received(env: &Env) -> bool {
 pub fn set_status(env: &Env, status: AccountStatus) {
     env.storage().instance().set(&DataKey::Status, &status);
 }
-
 pub fn get_status(env: &Env) -> AccountStatus {
     env.storage()
         .instance()
@@ -118,9 +110,18 @@ pub fn get_status(env: &Env) -> AccountStatus {
 pub fn set_swept_to(env: &Env, address: &Address) {
     env.storage().instance().set(&DataKey::SweptTo, address);
 }
-
 pub fn get_swept_to(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::SweptTo)
+}
+
+// Locked sweep destination (set once; immutable after first sweep)
+pub fn set_sweep_destination(env: &Env, address: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::SweepDestination, address);
+}
+pub fn get_sweep_destination(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::SweepDestination)
 }
 
 // Reserve lifecycle
@@ -131,78 +132,66 @@ pub fn init_reserve_tracking(env: &Env, base_reserve: i128) {
     set_last_sweep_id(env, 0);
     set_reserve_event_count(env, 0);
 }
-
 pub fn set_base_reserve_remaining(env: &Env, amount: i128) {
     env.storage()
         .instance()
         .set(&DataKey::BaseReserveRemaining, &amount);
 }
-
 pub fn get_base_reserve_remaining(env: &Env) -> i128 {
     env.storage()
         .instance()
         .get(&DataKey::BaseReserveRemaining)
         .unwrap_or(0)
 }
-
 pub fn set_available_reserve(env: &Env, amount: i128) {
     env.storage()
         .instance()
         .set(&DataKey::AvailableReserve, &amount);
 }
-
 pub fn get_available_reserve(env: &Env) -> i128 {
     env.storage()
         .instance()
         .get(&DataKey::AvailableReserve)
         .unwrap_or(0)
 }
-
 pub fn set_reserve_reclaimed(env: &Env, reclaimed: bool) {
     env.storage()
         .instance()
         .set(&DataKey::ReserveReclaimed, &reclaimed);
 }
-
 pub fn is_reserve_reclaimed(env: &Env) -> bool {
     env.storage()
         .instance()
         .get(&DataKey::ReserveReclaimed)
         .unwrap_or(false)
 }
-
 pub fn set_last_sweep_id(env: &Env, sweep_id: u64) {
     env.storage()
         .instance()
         .set(&DataKey::LastSweepId, &sweep_id);
 }
-
 pub fn get_last_sweep_id(env: &Env) -> u64 {
     env.storage()
         .instance()
         .get(&DataKey::LastSweepId)
         .unwrap_or(0)
 }
-
 pub fn set_reserve_event_count(env: &Env, count: u32) {
     env.storage()
         .instance()
         .set(&DataKey::ReserveEventCount, &count);
 }
-
 pub fn get_reserve_event_count(env: &Env) -> u32 {
     env.storage()
         .instance()
         .get(&DataKey::ReserveEventCount)
         .unwrap_or(0)
 }
-
 pub fn set_last_reserve_event(env: &Env, event: &ReserveReclaimed) {
     env.storage()
         .instance()
         .set(&DataKey::LastReserveEvent, event);
 }
-
 pub fn get_last_reserve_event(env: &Env) -> Option<ReserveReclaimed> {
     env.storage().instance().get(&DataKey::LastReserveEvent)
 }
@@ -213,7 +202,6 @@ pub fn set_contract_version(env: &Env, version: u32) {
         .instance()
         .set(&DataKey::ContractVersion, &version);
 }
-
 pub fn get_contract_version(env: &Env) -> u32 {
     env.storage()
         .instance()
@@ -227,7 +215,6 @@ pub fn set_authorized_controller(env: &Env, controller: &Address) {
         .instance()
         .set(&DataKey::AuthorizedController, controller);
 }
-
 pub fn get_authorized_controller(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::AuthorizedController)
 }
