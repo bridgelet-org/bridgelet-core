@@ -6,6 +6,10 @@ This document explains how to run tests, write new tests, and understand the tes
 
 - [Quick Start](#quick-start)
 - [Running Tests](#running-tests)
+  - [Unit Tests](#unit-tests)
+  - [Integration Tests](#integration-tests)
+  - [Fuzz Testing](#fuzz-testing)
+  - [Test Coverage](#test-coverage)
 - [Testing Strategy](#testing-strategy)
 - [Writing Tests](#writing-tests)
 - [Local Sandbox Testing](#local-sandbox-testing)
@@ -80,6 +84,22 @@ cd contracts/sweep_controller
 cargo test
 ```
 
+### Fuzz Testing
+
+Soroban contracts can be fuzz-tested using [cargo-fuzz](https://rust-fuzz.github.io/book/).
+
+> **Note**: Fuzz targets must be defined in the contract crate under a `fuzz/` directory before running.
+
+```bash
+# Install cargo-fuzz (requires nightly toolchain)
+cargo install cargo-fuzz
+
+# Run a fuzz target (replace <fuzz_target> with the target name defined in fuzz/fuzz_targets/)
+cargo fuzz run <fuzz_target>
+```
+
+See the [Rust Fuzz Book](https://rust-fuzz.github.io/book/) for how to write fuzz targets.
+
 ### Test Coverage
 
 While Rust doesn't have built-in coverage tools, you can use external tools:
@@ -88,8 +108,11 @@ While Rust doesn't have built-in coverage tools, you can use external tools:
 # Install cargo-tarpaulin (coverage tool)
 cargo install cargo-tarpaulin
 
-# Run with coverage
-cargo tarpaulin --out Html
+# Run with coverage and generate an HTML report
+cargo tarpaulin --out Html --output-dir coverage/
+
+# Open the report
+open coverage/tarpaulin-report.html
 ```
 
 ## Testing Strategy
@@ -364,7 +387,12 @@ The project includes test scripts in `scripts/`:
 
 # Deploy to testnet (not local)
 ./scripts/deploy-testnet.sh
+
+# Run the full local sandbox test suite (build + deploy + invoke)
+./scripts/test-local.sh
 ```
+
+> **Note**: `scripts/test-local.sh` automates the sandbox build-deploy-invoke cycle. If it does not exist yet, run the sandbox steps manually as described above.
 
 ### Stopping the Sandbox
 
