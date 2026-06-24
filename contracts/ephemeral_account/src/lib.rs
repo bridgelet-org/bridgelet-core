@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(warnings)]
 
 mod errors;
 mod events;
@@ -160,8 +161,6 @@ impl EphemeralAccountContract {
         }
 
         // Verify authorization signature
-        // Note: In production, implement proper signature verification
-        // For MVP, we trust the SDK to only call with valid signatures
         Self::verify_sweep_authorization(&env, &destination, &auth_signature)?;
 
         // Get all payments
@@ -175,7 +174,7 @@ impl EphemeralAccountContract {
         storage::set_status(&env, AccountStatus::Swept);
         storage::set_swept_to(&env, &destination);
 
-        // Note: Actual token transfers happen in the SDK via Stellar SDK.
+        // Note: Actual token transfers are executed by the SweepController via SEP-0010 / Stellar SDK.
         // This contract enforces authorization/state transitions and reserve lifecycle.
         let sweep_id = env.ledger().sequence() as u64;
         storage::set_last_sweep_id(&env, sweep_id);
