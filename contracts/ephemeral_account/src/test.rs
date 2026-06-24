@@ -316,13 +316,17 @@ mod test {
         client.record_payment(&1, &asset2);
 
         // Advance past expiry
-        env.ledger().with_mut(|l| l.sequence_number = expiry_ledger + 1);
+        env.ledger()
+            .with_mut(|l| l.sequence_number = expiry_ledger + 1);
 
         // expire() must return an error rather than silently overflowing
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             client.expire();
         }));
-        assert!(result.is_err(), "expire() should fail on i128 overflow in payment sum");
+        assert!(
+            result.is_err(),
+            "expire() should fail on i128 overflow in payment sum"
+        );
     }
 
     #[test]

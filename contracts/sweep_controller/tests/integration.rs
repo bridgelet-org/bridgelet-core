@@ -153,7 +153,7 @@ fn test_sweep_without_payment() {
     let env = Env::default();
     env.mock_all_auths();
 
-let ephemeral_id = env.register(EphemeralAccountContract, ());
+    let ephemeral_id = env.register(EphemeralAccountContract, ());
     let ephemeral_client = EphemeralAccountContractClient::new(&env, &ephemeral_id);
 
     let controller_id = env.register(SweepController, ());
