@@ -2,6 +2,7 @@
 
 use ephemeral_account::{EphemeralAccountContract, EphemeralAccountContractClient};
 use soroban_sdk::testutils::storage::Instance;
+use soroban_sdk::testutils::Ledger;
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 use sweep_controller::{SweepController, SweepControllerClient};
 
@@ -154,7 +155,7 @@ fn test_sweep_without_payment() {
     let env = Env::default();
     env.mock_all_auths();
 
-let ephemeral_id = env.register(EphemeralAccountContract, ());
+    let ephemeral_id = env.register(EphemeralAccountContract, ());
     let ephemeral_client = EphemeralAccountContractClient::new(&env, &ephemeral_id);
 
     let controller_id = env.register(SweepController, ());
@@ -550,7 +551,10 @@ fn test_ttl_extended_after_initialize() {
     controller_client.initialize(&creator, &authorized_signer, &None);
 
     let ttl = env.as_contract(&controller_id, || env.storage().instance().get_ttl());
-    assert!(ttl >= 518_400, "TTL should be at least 518_400 ledgers, got {ttl}");
+    assert!(
+        ttl >= 518_400,
+        "TTL should be at least 518_400 ledgers, got {ttl}"
+    );
 }
 
 #[test]
@@ -581,7 +585,10 @@ fn test_ttl_extended_after_can_sweep() {
     let _ = controller_client.can_sweep(&ephemeral_id);
 
     let ttl = env.as_contract(&controller_id, || env.storage().instance().get_ttl());
-    assert!(ttl >= 518_400, "TTL should be at least 518_400 ledgers, got {ttl}");
+    assert!(
+        ttl >= 518_400,
+        "TTL should be at least 518_400 ledgers, got {ttl}"
+    );
 }
 
 #[test]
@@ -606,5 +613,8 @@ fn test_ttl_extended_after_update_destination() {
     controller_client.update_authorized_destination(&new_dest);
 
     let ttl = env.as_contract(&controller_id, || env.storage().instance().get_ttl());
-    assert!(ttl >= 518_400, "TTL should be at least 518_400 ledgers, got {ttl}");
+    assert!(
+        ttl >= 518_400,
+        "TTL should be at least 518_400 ledgers, got {ttl}"
+    );
 }
