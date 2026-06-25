@@ -1,6 +1,6 @@
 use crate::events::ReserveReclaimed;
 use bridgelet_shared::{AccountStatus, Payment};
-use soroban_sdk::{contracttype, Address, Env, Map};
+use soroban_sdk::{contracttype, Address, BytesN, Env, Map};
 
 #[contracttype]
 pub enum DataKey {
@@ -17,10 +17,12 @@ pub enum DataKey {
     LastSweepId,
     ReserveEventCount,
     LastReserveEvent,
-    AuthorizedController,
+    /// Ed25519 public key (32 bytes) that must sign sweep authorizations.
+    AuthorizedSigner,
     ContractVersion,
     /// Relayer address authorized to call record_payment().
     Relayer,
+    MinPaymentAmount,
 }
 
 // Initialization
@@ -223,15 +225,29 @@ pub fn get_contract_version(env: &Env) -> u32 {
         .unwrap_or(0)
 }
 
-// Authorized controller
-pub fn set_authorized_controller(env: &Env, controller: &Address) {
+// Minimum payment amount
+pub fn set_min_payment_amount(env: &Env, amount: i128) {
     env.storage()
         .instance()
-        .set(&DataKey::AuthorizedController, controller);
+        .set(&DataKey::MinPaymentAmount, &amount);
 }
 
-pub fn get_authorized_controller(env: &Env) -> Option<Address> {
-    env.storage().instance().get(&DataKey::AuthorizedController)
+pub fn get_min_payment_amount(env: &Env) -> i128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::MinPaymentAmount)
+        .unwrap_or(0)
+}
+
+// Authorized controller
+pub fn set_authorized_signer(env: &Env, signer: &BytesN<32>) {
+    env.storage()
+        .instance()
+        .set(&DataKey::AuthorizedSigner, signer);
+}
+
+pub fn get_authorized_signer(env: &Env) -> Option<BytesN<32>> {
+    env.storage().instance().get(&DataKey::AuthorizedSigner)
 }
 
 // Relayer — the only address authorized to call record_payment()
