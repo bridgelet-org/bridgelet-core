@@ -40,6 +40,7 @@ impl EphemeralAccountContract {
         expiry_ledger: u32,
         recovery_address: Address,
         authorized_controller: Address,
+        min_amount: i128,
     ) -> Result<(), Error> {
         // Check if already initialized
         if storage::is_initialized(&env) {
@@ -55,6 +56,11 @@ impl EphemeralAccountContract {
             return Err(Error::InvalidExpiry);
         }
 
+        // Validate min_amount is non-negative
+        if min_amount < 0 {
+            return Err(Error::InvalidAmount);
+        }
+
         // Store initialization data
         storage::set_initialized(&env, true);
         storage::set_creator(&env, &creator);
@@ -62,6 +68,7 @@ impl EphemeralAccountContract {
         storage::set_recovery_address(&env, &recovery_address);
         storage::set_status(&env, AccountStatus::Active);
         storage::set_authorized_controller(&env, &authorized_controller);
+        storage::set_min_payment_amount(&env, min_amount);
         storage::init_reserve_tracking(&env, BASE_RESERVE_STROOPS);
         storage::set_contract_version(&env, CONTRACT_VERSION);
 
@@ -90,6 +97,12 @@ impl EphemeralAccountContract {
         // Validate amount
         if amount <= 0 {
             return Err(Error::InvalidAmount);
+        }
+
+        // Check minimum payment amount
+        let min_amount = storage::get_min_payment_amount(&env);
+        if amount < min_amount {
+            return Err(Error::PaymentBelowMinimum);
         }
 
         // Check for duplicate asset

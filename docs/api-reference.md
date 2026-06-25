@@ -23,6 +23,7 @@ fn initialize(
 | `creator` | `Address` | The account that created this contract. |
 | `expiry_ledger` | `u32` | The ledger sequence number at which the account expires. |
 | `recovery_address` | `Address` | Where funds are sent if the account expires. |
+| `min_amount` | `i128` | Minimum payment amount accepted by this account. Payments below this value are rejected with `PaymentBelowMinimum`. |
 
 #### `record_payment`
 Records an inbound payment. Supports multiple payments of different assets.
@@ -39,6 +40,8 @@ fn record_payment(
 | :--- | :--- | :--- |
 | `amount` | `i128` | The amount of the payment. Must be positive. |
 | `asset` | `Address` | The address of the asset contract (token). |
+
+Returns `Error::PaymentBelowMinimum` if `amount` is less than the `min_amount` set at initialization.
 
 #### `sweep`
 Authorizes a transfer of all assets to the destination and updates the account state to `Swept`.

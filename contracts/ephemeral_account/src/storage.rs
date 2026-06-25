@@ -19,6 +19,7 @@ pub enum DataKey {
     LastReserveEvent,
     AuthorizedController,
     ContractVersion,
+    MinPaymentAmount,
 }
 
 // Initialization
@@ -218,6 +219,20 @@ pub fn get_contract_version(env: &Env) -> u32 {
     env.storage()
         .instance()
         .get(&DataKey::ContractVersion)
+        .unwrap_or(0)
+}
+
+// Minimum payment amount
+pub fn set_min_payment_amount(env: &Env, amount: i128) {
+    env.storage()
+        .instance()
+        .set(&DataKey::MinPaymentAmount, &amount);
+}
+
+pub fn get_min_payment_amount(env: &Env) -> i128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::MinPaymentAmount)
         .unwrap_or(0)
 }
 
