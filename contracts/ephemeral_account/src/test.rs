@@ -571,6 +571,9 @@ mod test {
 
     #[test]
     fn test_get_status_lifecycle() {
+    #[test]
+    #[should_panic(expected = "Error(Contract, #5)")]
+    fn test_initialize_with_expired_ledger_rejected() {
         let env = Env::default();
         env.mock_all_auths();
 
@@ -614,5 +617,14 @@ mod test {
         let _ = client.get_status();
 
         assert_ttl_extended(&env, &contract_id);
+
+        // Advance ledger so we can clearly pass a past expiry
+        env.ledger().with_mut(|l| {
+            l.sequence_number = 100;
+        });
+
+        // expiry_ledger <= current ledger (50 <= 100) -- should return InvalidExpiry (#5)
+        let expired_ledger = 50u32;
+        client.initialize(&creator, &expired_ledger, &recovery, &controller);
     }
 }

@@ -158,8 +158,6 @@ impl EphemeralAccountContract {
         }
 
         // Verify authorization signature
-        // Note: In production, implement proper signature verification
-        // For MVP, we trust the SDK to only call with valid signatures
         Self::verify_sweep_authorization(&env, &destination, &auth_signature)?;
 
         // Get all payments
@@ -173,7 +171,7 @@ impl EphemeralAccountContract {
         storage::set_status(&env, AccountStatus::Swept);
         storage::set_swept_to(&env, &destination);
 
-        // Note: Actual token transfers happen in the SDK via Stellar SDK.
+        // Note: Actual token transfers are executed by the SweepController via SEP-0010 / Stellar SDK.
         // This contract enforces authorization/state transitions and reserve lifecycle.
         let sweep_id = env.ledger().sequence() as u64;
         storage::set_last_sweep_id(&env, sweep_id);
@@ -187,7 +185,27 @@ impl EphemeralAccountContract {
         Ok(())
     }
 
-    /// Check if account has expired
+    /// Check whether this ephemeral account has expired.
+    ///
+    /// ## Ledger time vs wall-clock time
+    ///
+    /// Soroban smart contracts cannot safely rely on wall-clock (UNIX) time for
+    /// consensus-critical comparisons because `env.ledger().timestamp()` reflects
+    /// the timestamp set by the validator and can drift slightly between ledgers.
+    /// Instead, expiry is tracked using the **ledger sequence number**
+    /// (`env.ledger().sequence()`), which increments by exactly 1 per closed
+    /// ledger and is the canonical, manipulation-resistant clock on Stellar.
+    ///
+    /// The `expiry_ledger` stored at initialization represents the first ledger
+    /// at which the account is considered expired. On Stellar mainnet each ledger
+    /// closes approximately every 5 seconds, so the relationship between ledger
+    /// ticks and wall-clock duration is:
+    ///
+    /// ```text
+    /// expiry_ledger = current_ledger + (desired_duration_seconds / ~5)
+    /// ```
+    ///
+    /// Returns `false` if the account has not yet been initialized.
     pub fn is_expired(env: Env) -> bool {
         if !storage::is_initialized(&env) {
             return false;
