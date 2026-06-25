@@ -49,6 +49,8 @@ This architecture document covers:
 - Integration patterns and off-chain requirements
 - Current limitations and future improvement plans
 
+It also links to companion reference docs for on-chain storage layout and error catalogues.
+
 ---
 
 ## System Architecture

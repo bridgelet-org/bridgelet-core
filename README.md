@@ -142,6 +142,10 @@ See [Security Audit Report](./docs/security-audit.md) (coming soon)
 - [API Reference](./docs/api-reference.md)
 - [Security Model](./docs/security.md)
 - [Testing Guide](./docs/testing.md)
+- [Storage Layout](./docs/STORAGE_LAYOUT.md)
+- [Error Catalogue](./docs/ERROR_CATALOGUE.md)
+- [Contributing Guide](./CONTRIBUTING.md)
+- [Changelog](./CHANGELOG.md)
 
 ## License
 

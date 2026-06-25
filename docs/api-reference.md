@@ -126,6 +126,8 @@ struct Payment {
 
 ### Error Codes
 
+For the full published error catalogue, see [docs/ERROR_CATALOGUE.md](./ERROR_CATALOGUE.md).
+
 | Code | Name | Description |
 | :--- | :--- | :--- |
 | 1 | `AlreadyInitialized` | Contract already initialized. |
