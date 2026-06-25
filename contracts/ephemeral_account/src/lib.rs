@@ -40,6 +40,8 @@ impl EphemeralAccountContract {
         creator: Address,
         expiry_ledger: u32,
         recovery_address: Address,
+        authorized_controller: Address,
+        relayer: Address,
         authorized_signer: BytesN<32>,
         min_amount: i128,
     ) -> Result<(), Error> {
@@ -69,6 +71,8 @@ impl EphemeralAccountContract {
         storage::set_expiry_ledger(&env, expiry_ledger);
         storage::set_recovery_address(&env, &recovery_address);
         storage::set_status(&env, AccountStatus::Active);
+        storage::set_authorized_controller(&env, &authorized_controller);
+        storage::set_relayer(&env, &relayer);
         storage::set_authorized_signer(&env, &authorized_signer);
         storage::set_min_payment_amount(&env, min_amount);
         storage::init_reserve_tracking(&env, BASE_RESERVE_STROOPS);
@@ -80,14 +84,16 @@ impl EphemeralAccountContract {
         Ok(())
     }
 
-    /// Record an inbound payment to this ephemeral account
-    /// Multiple payments with different assets are supported
+    /// Record an inbound payment to this ephemeral account.
+    /// Only the registered relayer address may call this function.
+    /// Multiple payments with different assets are supported.
     ///
     /// # Arguments
     /// * `amount` - Payment amount
     /// * `asset` - Asset address
     ///
     /// # Errors
+    /// Returns Error::Unauthorized if caller is not the registered relayer
     /// Returns Error::InvalidAmount if amount is not positive
     /// Returns Error::DuplicateAsset if asset already has a payment
     pub fn record_payment(env: Env, amount: i128, asset: Address) -> Result<(), Error> {
@@ -97,6 +103,9 @@ impl EphemeralAccountContract {
         }
 
         storage::extend_instance_ttl(&env);
+        // Only the registered relayer may record payments
+        let relayer = storage::get_relayer(&env).ok_or(Error::Unauthorized)?;
+        relayer.require_auth();
 
         // Validate amount
         if amount <= 0 {
