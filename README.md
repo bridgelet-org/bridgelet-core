@@ -8,6 +8,21 @@
 
 Bridgelet Core contains the Soroban smart contracts that enforce single-use restrictions on ephemeral Stellar accounts and manage the sweep logic for transferring funds to permanent wallets.
 
+## MVP Status
+
+### Current Stub Inventory
+
+| Function | Contract | Stub Status | Production Requirement | Tracking Issue |
+|----------|----------|-------------|------------------------|----------------|
+| `verify_sweep_authorization` | EphemeralAccount | **Partial** - Uses `require_auth()` instead of Ed25519 signature verification | Implement `env.crypto().ed25519_verify()` against stored `authorized_signer` with signature covering destination + nonce + contract_id | #86 |
+| Token transfers | SweepController | **Implemented** - `execute_transfers()` calls `token.transfer()` for all assets | Already implemented in `transfers.rs` | N/A |
+
+### Implementation Notes
+
+- **EphemeralAccount::sweep()**: Currently uses Soroban's `require_auth()` for authorization instead of cryptographic Ed25519 signature verification. The signature parameters (`destination`, `auth_signature`) are accepted but not cryptographically verified. Production implementation should use `env.crypto().ed25519_verify()` similar to SweepController's implementation.
+- **SweepController::execute_transfers()**: Token transfer logic is fully implemented using SEP-41 token contracts. All recorded payments are transferred atomically to the destination.
+- **Security guidance**: Always route sweeps through `SweepController` for proper Ed25519 signature verification. Do not call `EphemeralAccount::sweep()` directly until the signature verification stub is replaced.
+
 ## Tech Stack
 
 - **Language:** Rust
