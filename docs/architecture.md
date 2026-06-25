@@ -1,7 +1,7 @@
 # Bridgelet Core Architecture
 
-**Version:** 1.0  
-**Last Updated:** January 21, 2026  
+**Version:** 1.1  
+**Last Updated:** June 24, 2026  
 **Status:** MVP
 
 ---
@@ -13,6 +13,9 @@
 3. [Contract Details](#contract-details)
    - [EphemeralAccount Contract](#ephemeralaccount-contract)
    - [SweepController Contract](#sweepcontroller-contract)
+   - [ReserveContract](#reservecontract)
+   - [NativeTransfer Contract](#nativetransfer-contract)
+   - [bridgelet-shared Crate](#bridgelet-shared-crate)
 4. [Data Flow](#data-flow)
 5. [Design Decisions](#design-decisions)
 6. [Integration Points](#integration-points)
@@ -45,6 +48,8 @@ This architecture document covers:
 - Rationale for key design decisions
 - Integration patterns and off-chain requirements
 - Current limitations and future improvement plans
+
+It also links to companion reference docs for on-chain storage layout and error catalogues.
 
 ---
 
@@ -90,15 +95,29 @@ The Bridgelet Core system consists of three primary components:
 │                      │ Calls on sweep                   │
 │                      ▼                                  │
 │  ┌───────────────────────────────────────────────────┐ │
-│  │        SweepController Contract (Planned)         │ │
+│  │        SweepController Contract                   │ │
 │  │                                                   │ │
-│  │  • Authorization Validation                       │ │
-│  │  • Atomic Token Transfers                        │ │
-│  │  • Multi-Asset Support                           │ │
-│  │  • Base Reserve Reclamation                      │ │
-│  │  • Batch Operations                              │ │
+│  │  • Signature-based Authorization                  │ │
+│  │  • Atomic Token Transfers (multi-asset)           │ │
+│  │  • Nonce Replay Protection                        │ │
+│  │  • Locked/Flexible Destination Modes             │ │
+│  │  • Sweep Events                                   │ │
 │  │                                                   │ │
-│  │  Note: Currently in planning phase               │ │
+│  └───────────────────────────────────────────────────┘ │
+│                                                         │
+│  ┌───────────────────────────────────────────────────┐ │
+│  │        ReserveContract                            │ │
+│  │                                                   │ │
+│  │  • Admin-controlled base reserve config          │ │
+│  │  • Reserve amount query / enforcement             │ │
+│  │                                                   │ │
+│  └───────────────────────────────────────────────────┘ │
+│                                                         │
+│  ┌───────────────────────────────────────────────────┐ │
+│  │        NativeTransfer Contract (scaffold)         │ │
+│  │                                                   │ │
+│  │  • Scaffold only — implementation pending        │ │
+│  │                                                   │ │
 │  └───────────────────────────────────────────────────┘ │
 │                                                         │
 └─────────────────────────────────────────────────────────┘
@@ -129,16 +148,32 @@ The primary business logic contract that enforces restrictions:
 
 **Current Status**: ✅ Fully Implemented
 
-#### SweepController Contract (On-Chain - Planned)
+#### SweepController Contract (On-Chain)
 
-Planned contract for secure fund transfer execution:
+Handles the actual execution of fund transfers from ephemeral accounts to permanent wallets. Separates authorization logic (EphemeralAccount) from execution logic (SweepController).
 
-- **Transfer Logic**: Executes atomic token transfers from ephemeral to permanent wallets
-- **Multi-Asset Support**: Handles transfers of multiple asset types
-- **Reserve Management**: Reclaims base reserves after sweep
-- **Batch Operations**: Potentially supports sweeping multiple accounts
+- **Signature Authorization**: Validates Ed25519 signatures over (destination, nonce) before executing
+- **Multi-Asset Transfers**: Iterates over all recorded payments and executes each transfer via `TokenClient`
+- **Replay Protection**: Increments a per-contract nonce after each successful sweep
+- **Destination Locking**: Optional locked mode pins the authorized destination at initialization; flexible mode allows any destination per sweep
+- **Creator Controls**: Only the creator can update the authorized destination (before any sweep)
 
-**Current Status**: 📋 Planned (not yet implemented)
+**Current Status**: ✅ Fully Implemented
+
+#### ReserveContract (On-Chain)
+
+Admin-owned configuration contract that stores the canonical base-reserve amount for the workspace:
+
+- **Admin-gated writes**: Only the address supplied at `initialize()` can set the reserve value
+- **Shared config**: Other contracts can call `require_base_reserve()` to enforce the reserve invariant
+
+**Current Status**: ✅ Fully Implemented
+
+#### NativeTransfer Contract (On-Chain — Scaffold)
+
+Scaffolded contract that will handle native XLM transfers in a future issue. Currently contains only the empty `NativeTransferContract` struct, `Error` enum, and `NativeTransferExecuted` event type.
+
+**Current Status**: 🚧 Scaffold only — no implementation yet
 
 ### Network Topology
 
@@ -515,107 +550,120 @@ The contract defines 12 distinct error codes:
 
 ### SweepController Contract
 
-**Status**: 📋 Planned Feature (Not Yet Implemented)
+**Status**: ✅ Fully Implemented (`contracts/sweep_controller`)
 
 #### Purpose & Responsibilities
 
-The SweepController contract (when implemented) will handle the actual execution of fund transfers from ephemeral accounts to permanent wallets. It separates authorization logic (EphemeralAccount) from execution logic (SweepController).
+SweepController handles the execution of fund transfers from ephemeral accounts to permanent wallets. It separates authorization logic (EphemeralAccount) from execution logic (SweepController), so each contract stays small and auditable.
 
-**Planned Responsibilities**:
-1. Execute atomic token transfers
-2. Handle multiple asset types (XLM, USDC, custom tokens)
-3. Reclaim base reserves after sweep
-4. Support batch operations for efficiency
-5. Provide reentrancy protection
-6. Emit transfer confirmation events
+**Responsibilities**:
+1. Validate an Ed25519 signature over `(ephemeral_account, destination, nonce)` before executing
+2. Call `sweep()` on the EphemeralAccount contract to transition its state
+3. Iterate over all recorded payments and execute each token transfer via `TokenClient`
+4. Increment a per-contract nonce after each successful sweep to prevent replay attacks
+5. Optionally enforce a locked destination set at initialization
+6. Emit `SweepCompleted`, `DestinationAuthorized`, and `DestinationUpdated` events
 
-#### Authorization Flow (Planned)
+#### Authorization Flow
 
 ```mermaid
 sequenceDiagram
-    participant User
     participant SDK
-    participant Ephemeral as EphemeralAccount
     participant Sweep as SweepController
-    participant Network as Stellar Network
+    participant Ephemeral as EphemeralAccount
+    participant Token as TokenClient (SAC)
 
-    User->>SDK: Request claim
-    SDK->>SDK: Generate auth signature
-    SDK->>Ephemeral: sweep(destination, signature)
-    Ephemeral->>Ephemeral: Verify authorization
-    Ephemeral->>Ephemeral: Update status to Swept
-    Ephemeral->>Sweep: execute_transfer(destination, amount, asset)
-    Sweep->>Sweep: Validate caller is EphemeralAccount
-    Sweep->>Network: Transfer tokens
-    Network-->>Sweep: Transfer confirmed
-    Sweep->>Sweep: Reclaim base reserve
-    Sweep-->>Ephemeral: Transfer complete
-    Ephemeral->>Ephemeral: Emit SweepExecuted event
-    Ephemeral-->>SDK: Sweep successful
-    SDK-->>User: Claim complete
+    SDK->>SDK: Generate Ed25519 signature over (account, destination, nonce)
+    SDK->>Sweep: execute_sweep(ephemeral_account, destination, auth_signature)
+    Sweep->>Sweep: Validate destination (locked mode check)
+    Sweep->>Sweep: Verify Ed25519 signature via AuthContext
+    Sweep->>Sweep: Increment nonce (replay protection)
+    Sweep->>Ephemeral: sweep(destination, auth_signature)
+    Ephemeral->>Ephemeral: Validate state & update status → Swept
+    Ephemeral-->>Sweep: OK
+    Sweep->>Ephemeral: get_info()
+    Ephemeral-->>Sweep: AccountInfo { payments, ... }
+    loop for each payment
+        Sweep->>Token: transfer(ephemeral_account, destination, amount)
+        Token-->>Sweep: OK
+    end
+    Sweep->>Sweep: Emit SweepCompleted event
+    Sweep-->>SDK: Ok(())
 ```
 
-#### Transfer Mechanisms (Planned)
+#### Function Reference
 
-**Single Asset Transfer**:
-- Transfer specified amount of single asset type
-- Validate sufficient balance
-- Execute atomic transfer via Stellar SAC (Smart Asset Contract)
+##### `initialize(env, authorized_signer, authorized_destination, creator)`
 
-**Multi-Asset Transfer** (Future):
-- Iterate through all held assets
-- Transfer each asset type
-- All-or-nothing atomicity
+Stores the Ed25519 public key that will sign sweep authorizations, an optional locked destination, and the creator address. Initializes the nonce to 0. Can only be called once.
 
-**Reserve Reclamation**:
-- After transfers complete, close ephemeral account
-- Reclaim 1 XLM base reserve
-- Transfer reserve to destination or recovery address
+##### `execute_sweep(env, ephemeral_account, destination, auth_signature)`
 
-#### Error Handling (Planned)
+Main entry point. Validates destination (locked mode), verifies the signature, increments the nonce, calls `EphemeralAccount::sweep()`, then executes token transfers for every payment in `AccountInfo.payments`.
 
-Expected error scenarios:
-- Insufficient balance for transfer
-- Invalid asset contract address
-- Transfer operation failed
-- Unauthorized caller (not EphemeralAccount contract)
-- Reentrancy attempt
-- Reserve reclamation failed
+##### `can_sweep(env, ephemeral_account) -> bool`
 
-#### Implementation Notes
+Read-only helper. Returns `true` if the account has `payment_received = true`, status is `PaymentReceived`, and the account is not expired.
 
-**Why Not Implemented Yet?**
+##### `update_authorized_destination(env, new_destination)`
 
-The MVP focuses on the authorization and state management layer (EphemeralAccount contract). The SDK currently handles actual token transfers via the Stellar SDK, which is sufficient for initial testing and validation.
+Allows the creator to change the locked destination before any sweep has occurred (nonce == 0). Emits `DestinationUpdated`.
 
-**Future Implementation**:
+#### Error Codes
 
-When implemented, SweepController will:
-1. Provide on-chain transfer execution guarantees
-2. Enable atomic multi-asset transfers
-3. Simplify SDK implementation
-4. Improve security through contract-enforced transfers
+| Code | Name | Meaning |
+|------|------|---------|
+| 1 | `AuthorizationFailed` | Signature invalid or already initialized |
+| 2 | `InvalidAccount` | Account not in sweepable state |
+| 3 | `TransferFailed` | Token transfer failed |
+| 4 | `AccountNotReady` | No payment received or zero amount |
+| 5 | `UnauthorizedDestination` | Destination doesn't match locked destination |
+| 6 | `AccountAlreadySwept` | Nonce > 0, sweep already executed |
 
-**API Preview** (Tentative):
-```rust
-pub trait SweepControllerInterface {
-    /// Execute sweep transfer
-    fn execute_transfer(
-        env: Env,
-        caller: Address,  // Must be EphemeralAccount contract
-        destination: Address,
-        amount: i128,
-        asset: Address,
-    ) -> Result<(), Error>;
-    
-    /// Reclaim base reserve
-    fn reclaim_reserve(
-        env: Env,
-        ephemeral_account: Address,
-        destination: Address,
-    ) -> Result<(), Error>;
-}
-```
+---
+
+### ReserveContract
+
+**Status**: ✅ Fully Implemented (`contracts/reserve_contract`)
+
+#### Purpose & Responsibilities
+
+A lightweight admin-owned configuration contract that stores the canonical base-reserve amount for the workspace. Contracts that need to enforce a minimum reserve call `require_base_reserve()` rather than hard-coding the value.
+
+#### Function Reference
+
+| Function | Description |
+|----------|-------------|
+| `initialize(env, admin)` | Set admin address; can only be called once |
+| `set_base_reserve(env, amount)` | Admin-only; store the reserve amount |
+| `get_base_reserve(env) -> Option<i128>` | Read stored reserve or `None` |
+| `require_base_reserve(env) -> Result<i128, Error>` | Returns amount or errors if not set |
+| `has_base_reserve(env) -> bool` | Returns `true` if a reserve has been configured |
+| `get_admin(env) -> Option<Address>` | Read current admin |
+
+---
+
+### NativeTransfer Contract
+
+**Status**: 🚧 Scaffold Only (`contracts/native_transfer`)
+
+Boilerplate contract providing the directory structure, empty `NativeTransferContract` struct, `Error` enum (`InvalidAmount = 1`, `TransferFailed = 2`), and `NativeTransferExecuted` event type. No logic is implemented — this is the foundation for a future implementation issue.
+
+---
+
+### bridgelet-shared Crate
+
+**Status**: ✅ Implemented (`contracts/shared`)
+
+A `rlib`-only Soroban crate that defines shared types used across all contracts:
+
+| Type | Description |
+|------|-------------|
+| `Payment { asset, amount, timestamp }` | A single inbound payment record |
+| `AccountStatus` (`Active=0`, `PaymentReceived=1`, `Swept=2`, `Expired=3`) | Ordered enum (`PartialOrd + Ord`) representing account lifecycle state |
+| `AccountInfo` | Full account snapshot returned by `EphemeralAccount::get_info()` |
+
+The crate exposes a `testutils` feature gate (`soroban-sdk/testutils`) so that contracts can add it as a `dev-dependency` with test utilities enabled without coupling normal builds to the test runtime.
 
 ---
 
@@ -661,38 +709,41 @@ sequenceDiagram
     participant User as End User
     participant Client as Client App
     participant SDK as Bridgelet SDK
-    participant Contract as EphemeralAccount
-    participant Stellar as Stellar Network
+    participant Sweep as SweepController
+    participant Ephemeral as EphemeralAccount
+    participant Token as TokenClient (SAC)
 
     User->>Client: Initiate claim/sweep
     Client->>Client: User provides destination address
     Client->>SDK: sweepToWallet(ephemeral_id, destination_address)
-    
-    SDK->>SDK: Generate authorization signature
-    Note over SDK: Sign: hash(destination, timestamp, nonce)<br/>with authorized private key
-    
-    SDK->>Contract: sweep(destination, auth_signature)
-    
-    Note over Contract: Verify contract initialized
-    Note over Contract: Check status != Swept
-    Note over Contract: Verify payment received
-    Note over Contract: Check not expired
-    
-    Contract->>Contract: Verify authorization signature
-    Note over Contract: ⚠️ Currently placeholder<br/>MVP trusts SDK
-    
-    Contract->>Contract: Update status = Swept (reentrancy protection)
-    Contract->>Contract: Store swept_to = destination
-    Contract->>Contract: Emit SweepExecuted event
-    Contract-->>SDK: Sweep authorized
-    
-    SDK->>Stellar: Transfer tokens (via Stellar SDK)
-    Note over SDK,Stellar: Transfer payment_amount of payment_asset<br/>from ephemeral to destination
-    Stellar-->>SDK: Transfer confirmed
-    
-    SDK->>Stellar: Optional: Close ephemeral account
-    SDK->>Stellar: Reclaim base reserve (1 XLM)
-    
+
+    SDK->>SDK: Generate Ed25519 signature over (ephemeral_account, destination, nonce)
+
+    SDK->>Sweep: execute_sweep(ephemeral_account, destination, auth_signature)
+
+    Note over Sweep: Validate locked destination (if set)
+    Sweep->>Sweep: Verify Ed25519 signature via AuthContext
+    Sweep->>Sweep: Increment nonce (replay protection)
+
+    Sweep->>Ephemeral: sweep(destination, auth_signature)
+    Note over Ephemeral: Verify initialized, not Swept/Expired
+    Note over Ephemeral: Verify payment received
+    Ephemeral->>Ephemeral: Update status → Swept
+    Ephemeral->>Ephemeral: Store swept_to = destination
+    Ephemeral->>Ephemeral: Emit SweepExecutedMulti event
+    Ephemeral-->>Sweep: Ok(())
+
+    Sweep->>Ephemeral: get_info()
+    Ephemeral-->>Sweep: AccountInfo { payments, ... }
+
+    loop for each payment in AccountInfo.payments
+        Sweep->>Token: transfer(ephemeral_account → destination, amount)
+        Token-->>Sweep: Transfer confirmed
+    end
+
+    Sweep->>Sweep: Emit SweepCompleted event
+    Sweep-->>SDK: Ok(())
+
     SDK-->>Client: Sweep complete
     Client-->>User: Funds received in wallet
 ```
@@ -776,7 +827,7 @@ This section explains the rationale behind key architectural choices in Bridgele
    - Batch operations across multiple accounts
    - Different fee structures for different contract types
 
-**Tradeoff**: Adds complexity (two contracts to deploy, maintain). For MVP, SDK handles transfers to simplify initial implementation.
+**Tradeoff**: Adds complexity (two contracts to deploy and maintain). The benefit — cleaner auditing, independent upgradeability, and on-chain transfer guarantees — outweighs the overhead for production use.
 
 ---
 

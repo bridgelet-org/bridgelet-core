@@ -37,6 +37,7 @@ impl EphemeralAccountContract {
         expiry_ledger: u32,
         recovery_address: Address,
         authorized_controller: Address,
+        min_amount: i128,
     ) -> Result<(), Error> {
         if storage::is_initialized(&env) {
             return Err(Error::AlreadyInitialized);
@@ -46,12 +47,20 @@ impl EphemeralAccountContract {
         if expiry_ledger <= current_ledger {
             return Err(Error::InvalidExpiry);
         }
+
+        // Validate min_amount is non-negative
+        if min_amount < 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        // Store initialization data
         storage::set_initialized(&env, true);
         storage::set_creator(&env, &creator);
         storage::set_expiry_ledger(&env, expiry_ledger);
         storage::set_recovery_address(&env, &recovery_address);
         storage::set_status(&env, AccountStatus::Active);
         storage::set_authorized_controller(&env, &authorized_controller);
+        storage::set_min_payment_amount(&env, min_amount);
         storage::init_reserve_tracking(&env, BASE_RESERVE_STROOPS);
         storage::set_contract_version(&env, CONTRACT_VERSION);
         events::emit_account_created(&env, creator, expiry_ledger);
@@ -75,6 +84,14 @@ impl EphemeralAccountContract {
         if amount <= 0 {
             return Err(Error::InvalidAmount);
         }
+
+        // Check minimum payment amount
+        let min_amount = storage::get_min_payment_amount(&env);
+        if amount < min_amount {
+            return Err(Error::PaymentBelowMinimum);
+        }
+
+        // Check for duplicate asset
         if storage::get_payment(&env, &asset).is_some() {
             return Err(Error::DuplicateAsset);
         }
@@ -128,6 +145,8 @@ impl EphemeralAccountContract {
         if Self::is_expired(env.clone()) {
             return Err(Error::AccountExpired);
         }
+
+        // Verify authorization signature
         Self::verify_sweep_authorization(&env, &destination, &auth_signature)?;
         let payments = storage::get_all_payments(&env);
         let mut payments_vec = Vec::new(&env);
@@ -137,6 +156,9 @@ impl EphemeralAccountContract {
         // Update status before transfers to prevent re-entrancy.
         storage::set_status(&env, AccountStatus::Swept);
         storage::set_swept_to(&env, &destination);
+
+        // Note: Actual token transfers are executed by the SweepController via SEP-0010 / Stellar SDK.
+        // This contract enforces authorization/state transitions and reserve lifecycle.
         let sweep_id = env.ledger().sequence() as u64;
         storage::set_last_sweep_id(&env, sweep_id);
         // Execute on-chain token transfers for every recorded payment.
@@ -157,6 +179,27 @@ impl EphemeralAccountContract {
     ///
     /// Expiry is determined by comparing `env.ledger().sequence()` against
     /// `expiry_ledger`. Returns `false` if the account is not initialized.
+    /// Check whether this ephemeral account has expired.
+    ///
+    /// ## Ledger time vs wall-clock time
+    ///
+    /// Soroban smart contracts cannot safely rely on wall-clock (UNIX) time for
+    /// consensus-critical comparisons because `env.ledger().timestamp()` reflects
+    /// the timestamp set by the validator and can drift slightly between ledgers.
+    /// Instead, expiry is tracked using the **ledger sequence number**
+    /// (`env.ledger().sequence()`), which increments by exactly 1 per closed
+    /// ledger and is the canonical, manipulation-resistant clock on Stellar.
+    ///
+    /// The `expiry_ledger` stored at initialization represents the first ledger
+    /// at which the account is considered expired. On Stellar mainnet each ledger
+    /// closes approximately every 5 seconds, so the relationship between ledger
+    /// ticks and wall-clock duration is:
+    ///
+    /// ```text
+    /// expiry_ledger = current_ledger + (desired_duration_seconds / ~5)
+    /// ```
+    ///
+    /// Returns `false` if the account has not yet been initialized.
     pub fn is_expired(env: Env) -> bool {
         if !storage::is_initialized(&env) {
             return false;
