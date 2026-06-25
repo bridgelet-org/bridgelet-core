@@ -2,9 +2,7 @@
 
 **Soroban smart contracts for ephemeral account restrictions**
 
-**MVP Status**
-> 🚧 **MVP — Active Development:** Authorization and token transfer layers are not yet 
-> implemented on-chain. See [MVP Status](#mvp-status) for details.
+**Status:** Active Development
 
 ## Overview
 
@@ -33,13 +31,6 @@ Handles fund transfers:
 - Handles multi-asset transfers
 - Reclaims base reserves
 
-### 3. ReserveContract
-Stores and exposes the Stellar base reserve configuration:
-- Admin-controlled base reserve amount (stored in stroops)
-- Distinguishes user funds from network overhead in ephemeral accounts
-- TTL management to prevent contract data archival
-- Event emission for reserve updates and auditability
-
 ## Project Structure
 
 contracts/
@@ -54,22 +45,13 @@ contracts/
 │   ├── src/
 │   │   ├── lib.rs
 │   │   ├── authorization.rs
-│   │   ├── transfers.rs
+│   │   └── transfers.rs
 │   │   ├── storage.rs       # State management
-│   │   └── errors.rs        # Error types
-│   └── Cargo.toml
-├── reserve_contract/        # ← NEW
-│   ├── src/
-│   │   ├── lib.rs           # Main contract
-│   │   ├── storage.rs       # State management
-│   │   ├── events.rs        # Event definitions
 │   │   └── errors.rs        # Error types
 │   └── Cargo.toml
 └── shared/
-    ├── src/
-    │   ├── lib.rs
-    │   └── types.rs
-    └── Cargo.toml
+└── types.rs             # Shared types
+
 ## Prerequisites
 ```bash
 # Install Rust
@@ -126,16 +108,12 @@ pub trait EphemeralAccountInterface {
     fn record_payment(env: Env, amount: i128, asset: Address) -> Result<(), Error>;
     
     // Execute sweep to permanent wallet
-    fn sweep(env: Env, destination: Address, auth_signature: BytesN<64>) -> Result<(), Error>;
+    fn sweep(env: Env, destination: Address) -> Result<(), Error>;
     
     // Check if account is expired
     fn is_expired(env: Env) -> bool;
 }
 ```
-> **⚠️ MVP:** On-chain authorization is not enforced at the `EphemeralAccount` contract
-> level. Calling `EphemeralAccount::sweep()` directly bypasses all signature verification.
-> Authorization is only enforced when sweeps are routed through `SweepController`.
-> Do not call `EphemeralAccount::sweep()` directly in production.
 
 See [Bridgelet Documentation](https://github.com/bridgelet-org/bridgelet) for full API reference.
 
@@ -164,6 +142,10 @@ See [Security Audit Report](./docs/security-audit.md) (coming soon)
 - [API Reference](./docs/api-reference.md)
 - [Security Model](./docs/security.md)
 - [Testing Guide](./docs/testing.md)
+- [Storage Layout](./docs/STORAGE_LAYOUT.md)
+- [Error Catalogue](./docs/ERROR_CATALOGUE.md)
+- [Contributing Guide](./CONTRIBUTING.md)
+- [Changelog](./CHANGELOG.md)
 
 ## License
 

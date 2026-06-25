@@ -17,6 +17,9 @@ pub enum DataKey {
     LastSweepId,
     ReserveEventCount,
     LastReserveEvent,
+    AuthorizedController,
+    ContractVersion,
+    MinPaymentAmount,
 }
 
 // Initialization
@@ -203,4 +206,43 @@ pub fn set_last_reserve_event(env: &Env, event: &ReserveReclaimed) {
 
 pub fn get_last_reserve_event(env: &Env) -> Option<ReserveReclaimed> {
     env.storage().instance().get(&DataKey::LastReserveEvent)
+}
+
+// Contract version
+pub fn set_contract_version(env: &Env, version: u32) {
+    env.storage()
+        .instance()
+        .set(&DataKey::ContractVersion, &version);
+}
+
+pub fn get_contract_version(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::ContractVersion)
+        .unwrap_or(0)
+}
+
+// Minimum payment amount
+pub fn set_min_payment_amount(env: &Env, amount: i128) {
+    env.storage()
+        .instance()
+        .set(&DataKey::MinPaymentAmount, &amount);
+}
+
+pub fn get_min_payment_amount(env: &Env) -> i128 {
+    env.storage()
+        .instance()
+        .get(&DataKey::MinPaymentAmount)
+        .unwrap_or(0)
+}
+
+// Authorized controller
+pub fn set_authorized_controller(env: &Env, controller: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::AuthorizedController, controller);
+}
+
+pub fn get_authorized_controller(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::AuthorizedController)
 }

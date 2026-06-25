@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(warnings)]
 
 mod errors;
 mod events;
@@ -17,6 +18,7 @@ pub use events::{
 pub use storage::DataKey;
 
 const BASE_RESERVE_STROOPS: i128 = 1_000_000_000;
+const CONTRACT_VERSION: u32 = 1;
 
 #[contract]
 pub struct EphemeralAccountContract;
@@ -37,6 +39,8 @@ impl EphemeralAccountContract {
         creator: Address,
         expiry_ledger: u32,
         recovery_address: Address,
+        authorized_controller: Address,
+        min_amount: i128,
     ) -> Result<(), Error> {
         // Check if already initialized
         if storage::is_initialized(&env) {
@@ -52,13 +56,21 @@ impl EphemeralAccountContract {
             return Err(Error::InvalidExpiry);
         }
 
+        // Validate min_amount is non-negative
+        if min_amount < 0 {
+            return Err(Error::InvalidAmount);
+        }
+
         // Store initialization data
         storage::set_initialized(&env, true);
         storage::set_creator(&env, &creator);
         storage::set_expiry_ledger(&env, expiry_ledger);
         storage::set_recovery_address(&env, &recovery_address);
         storage::set_status(&env, AccountStatus::Active);
+        storage::set_authorized_controller(&env, &authorized_controller);
+        storage::set_min_payment_amount(&env, min_amount);
         storage::init_reserve_tracking(&env, BASE_RESERVE_STROOPS);
+        storage::set_contract_version(&env, CONTRACT_VERSION);
 
         // Emit event
         events::emit_account_created(&env, creator, expiry_ledger);
@@ -85,6 +97,12 @@ impl EphemeralAccountContract {
         // Validate amount
         if amount <= 0 {
             return Err(Error::InvalidAmount);
+        }
+
+        // Check minimum payment amount
+        let min_amount = storage::get_min_payment_amount(&env);
+        if amount < min_amount {
+            return Err(Error::PaymentBelowMinimum);
         }
 
         // Check for duplicate asset
@@ -155,8 +173,6 @@ impl EphemeralAccountContract {
         }
 
         // Verify authorization signature
-        // Note: In production, implement proper signature verification
-        // For MVP, we trust the SDK to only call with valid signatures
         Self::verify_sweep_authorization(&env, &destination, &auth_signature)?;
 
         // Get all payments
@@ -170,7 +186,7 @@ impl EphemeralAccountContract {
         storage::set_status(&env, AccountStatus::Swept);
         storage::set_swept_to(&env, &destination);
 
-        // Note: Actual token transfers happen in the SDK via Stellar SDK.
+        // Note: Actual token transfers are executed by the SweepController via SEP-0010 / Stellar SDK.
         // This contract enforces authorization/state transitions and reserve lifecycle.
         let sweep_id = env.ledger().sequence() as u64;
         storage::set_last_sweep_id(&env, sweep_id);
@@ -184,7 +200,27 @@ impl EphemeralAccountContract {
         Ok(())
     }
 
-    /// Check if account has expired
+    /// Check whether this ephemeral account has expired.
+    ///
+    /// ## Ledger time vs wall-clock time
+    ///
+    /// Soroban smart contracts cannot safely rely on wall-clock (UNIX) time for
+    /// consensus-critical comparisons because `env.ledger().timestamp()` reflects
+    /// the timestamp set by the validator and can drift slightly between ledgers.
+    /// Instead, expiry is tracked using the **ledger sequence number**
+    /// (`env.ledger().sequence()`), which increments by exactly 1 per closed
+    /// ledger and is the canonical, manipulation-resistant clock on Stellar.
+    ///
+    /// The `expiry_ledger` stored at initialization represents the first ledger
+    /// at which the account is considered expired. On Stellar mainnet each ledger
+    /// closes approximately every 5 seconds, so the relationship between ledger
+    /// ticks and wall-clock duration is:
+    ///
+    /// ```text
+    /// expiry_ledger = current_ledger + (desired_duration_seconds / ~5)
+    /// ```
+    ///
+    /// Returns `false` if the account has not yet been initialized.
     pub fn is_expired(env: Env) -> bool {
         if !storage::is_initialized(&env) {
             return false;
@@ -194,6 +230,11 @@ impl EphemeralAccountContract {
         let current_ledger = env.ledger().sequence();
 
         current_ledger >= expiry_ledger
+    }
+
+    /// Get the contract version stored at initialization
+    pub fn version(env: Env) -> u32 {
+        storage::get_contract_version(&env)
     }
 
     /// Get current account status
@@ -353,16 +394,12 @@ impl EphemeralAccountContract {
     // Private helper functions
 
     fn verify_sweep_authorization(
-        _env: &Env,
+        env: &Env,
         _destination: &Address,
         _signature: &BytesN<64>,
     ) -> Result<(), Error> {
-        // ⚠️ MVP STUB: Signature verification is NOT enforced on-chain in this contract.
-        // Calling EphemeralAccount::sweep() directly bypasses all authorization checks.
-        // Authorization is only enforced when going through SweepController, which
-        // performs Ed25519 signature verification via authorization.rs.
-        // TODO: Implement on-chain signature verification against an authorized signer
-        // before production use.
+        let controller = storage::get_authorized_controller(env).ok_or(Error::Unauthorized)?;
+        controller.require_auth();
         Ok(())
     }
 

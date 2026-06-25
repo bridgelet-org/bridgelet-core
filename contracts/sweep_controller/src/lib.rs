@@ -3,7 +3,7 @@
 mod authorization;
 mod errors;
 mod storage;
-// mod transfers;
+mod transfers;
 
 use ephemeral_account::EphemeralAccountContractClient as EphemeralAccountClient;
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env};
@@ -28,18 +28,18 @@ impl SweepController {
     /// Returns Error::AuthorizationFailed if called more than once
     pub fn initialize(
         env: Env,
+        creator: Address,
         authorized_signer: BytesN<32>,
         authorized_destination: Option<Address>,
-        creator: Address,
     ) -> Result<(), Error> {
         // Check if already initialized
         if storage::get_authorized_signer(&env).is_some() {
             return Err(Error::AuthorizationFailed);
         }
 
-    
-       // Verify and store the creator address
+        // Require the creator to authorize this initialization
         creator.require_auth();
+
         storage::set_creator(&env, &creator);
 
         // Store the authorized signer public key
@@ -110,22 +110,25 @@ impl SweepController {
             return Err(Error::AccountNotReady);
         }
 
-        let amount = info.payments.iter().map(|p| p.amount).sum();
+        let amount = info
+            .payments
+            .iter()
+            .try_fold(0i128, |acc, p| acc.checked_add(p.amount))
+            .ok_or(Error::Overflow)?;
         if amount == 0 {
             return Err(Error::AccountNotReady);
         }
 
-        // Execute the actual token transfer
-        // Note: In production, the ephemeral account would need to authorize this transfer
-        // let transfer_ctx = TransferContext::new(
-        //     info.payment_asset,
-        //     ephemeral_account.clone(),
-        //     destination.clone(),
-        //     amount,
-        // );
-        // transfer_ctx.execute(&env)?;
+        // Execute the actual token transfers for all recorded payments
+        let mut payments_vec = soroban_sdk::Vec::new(&env);
+        for payment in info.payments.iter() {
+            payments_vec.push_back(payment);
+        }
 
-        // Emit sweep executed event
+        transfers::execute_transfers(&env, &ephemeral_account, &destination, &payments_vec)
+            .map_err(|_| Error::TransferFailed)?;
+
+        // Emit sweep completed event after successful transfer
         emit_sweep_completed(&env, ephemeral_account, destination, amount);
 
         Ok(())
