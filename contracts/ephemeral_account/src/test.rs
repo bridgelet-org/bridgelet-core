@@ -6,7 +6,16 @@ mod test {
         storage, AccountStatus, EphemeralAccountContract, EphemeralAccountContractClient,
         ReserveReclaimed,
     };
-    use soroban_sdk::{testutils::Address as _, testutils::Ledger, Address, BytesN, Env};
+    use ed25519_dalek::SigningKey;
+    use soroban_sdk::{
+        testutils::Address as _,
+        testutils::Ledger,
+        xdr::ToXdr,
+        Address,
+        Bytes,
+        BytesN,
+        Env,
+    };
 
     const BASE_RESERVE_STROOPS: i128 = 1_000_000_000;
 
@@ -348,12 +357,12 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
-        let controller = Address::generate(&env);
+        let signer = test_signer_pubkey(&env);
         let asset1 = Address::generate(&env);
         let asset2 = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &signer);
 
         // Record two payments that would overflow i128 when summed
         client.record_payment(&i128::MAX, &asset1);
@@ -496,25 +505,8 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let signer = test_signer_pubkey(&env);
-        let asset = Address::generate(&env);
-        let destination = Address::generate(&env);
-        let expiry_ledger = env.ledger().sequence() + 1000;
+        let expired_ledger = env.ledger().sequence();
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &signer);
-        client.record_payment(&100, &asset);
-
-        // Bad signature — all zeros — should be rejected by ed25519_verify
-        let bad_sig = BytesN::from_array(&env, &[0u8; 64]);
-        client.sweep(&destination, &bad_sig);
-        let controller = Address::generate(&env);
-
-        // Advance ledger so we can clearly pass a past expiry
-        env.ledger().with_mut(|l| {
-            l.sequence_number = 100;
-        });
-
-        // expiry_ledger <= current ledger (50 <= 100) -- should return InvalidExpiry (#5)
-        let expired_ledger = 50u32;
-        client.initialize(&creator, &expired_ledger, &recovery, &controller);
+        client.initialize(&creator, &expired_ledger, &recovery, &signer);
     }
 }
