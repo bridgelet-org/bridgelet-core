@@ -36,6 +36,8 @@ impl EphemeralAccountContract {
         creator: Address,
         expiry_ledger: u32,
         recovery_address: Address,
+        authorized_controller: Address,
+        relayer: Address,
         authorized_signer: BytesN<32>,
         min_amount: i128,
     ) -> Result<(), Error> {
@@ -62,6 +64,8 @@ impl EphemeralAccountContract {
         storage::set_expiry_ledger(&env, expiry_ledger);
         storage::set_recovery_address(&env, &recovery_address);
         storage::set_status(&env, AccountStatus::Active);
+        storage::set_authorized_controller(&env, &authorized_controller);
+        storage::set_relayer(&env, &relayer);
         storage::set_authorized_signer(&env, &authorized_signer);
         storage::set_min_payment_amount(&env, min_amount);
         storage::init_reserve_tracking(&env, BASE_RESERVE_STROOPS);
