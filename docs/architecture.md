@@ -201,6 +201,7 @@ The EphemeralAccount contract is the core business logic layer that enforces sin
 3. Handle time-based expiration
 4. Emit events for auditability
 5. Store account metadata and state
+6. Extend instance storage TTL on every public entry-point to prevent archival
 
 #### State Machine
 
@@ -550,6 +551,20 @@ The contract defines 12 distinct error codes:
 
 ### SweepController Contract
 
+**Status**: ✅ Fully Implemented
+
+#### Purpose & Responsibilities
+
+The SweepController contract handles the actual execution of fund transfers from ephemeral accounts to permanent wallets. It separates authorization logic (EphemeralAccount) from execution logic (SweepController).
+
+**Key Responsibilities**:
+1. Execute atomic token transfers
+2. Handle multiple asset types (XLM, USDC, custom tokens)
+3. Reclaim base reserves after sweep
+4. Support batch operations for efficiency
+5. Provide reentrancy protection
+6. Emit transfer confirmation events
+7. Extend instance storage TTL on every public entry-point to prevent archival
 **Status**: ✅ Fully Implemented (`contracts/sweep_controller`)
 
 #### Purpose & Responsibilities
@@ -911,6 +926,7 @@ The SDK handles account creation, payment monitoring via Horizon API, authorizat
 3. Validate payment details
 4. Call `record_payment()` on contract
 5. Notify client application
+6. Extend instance TTL periodically for accounts still within their expiry window
 
 #### Sweep Execution Coordination
 
@@ -920,6 +936,7 @@ The SDK handles account creation, payment monitoring via Horizon API, authorizat
 3. Wait for contract approval
 4. Execute token transfer via Stellar SDK
 5. Optionally close account and reclaim reserve
+6. Extend instance TTL periodically for accounts still within their expiry window
 
 ---
 

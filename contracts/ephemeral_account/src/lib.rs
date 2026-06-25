@@ -47,6 +47,9 @@ impl EphemeralAccountContract {
             return Err(Error::AlreadyInitialized);
         }
         creator.require_auth();
+
+        storage::extend_instance_ttl(&env);
+        // Validate expiry is in future
         let current_ledger = env.ledger().sequence();
         if expiry_ledger <= current_ledger {
             return Err(Error::InvalidExpiry);
@@ -88,6 +91,13 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
+
+        storage::extend_instance_ttl(&env);
+        // Only the registered relayer may record payments
+        let relayer = storage::get_relayer(&env).ok_or(Error::Unauthorized)?;
+        relayer.require_auth();
+
+        // Validate amount
         if amount <= 0 {
             return Err(Error::InvalidAmount);
         }
@@ -147,6 +157,10 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
+
+        storage::extend_instance_ttl(&env);
+
+        // Check not already swept
         if storage::get_status(&env) == AccountStatus::Swept {
             return Err(Error::AlreadySwept);
         }
@@ -224,6 +238,9 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return false;
         }
+
+        storage::extend_instance_ttl(&env);
+
         let expiry_ledger = storage::get_expiry_ledger(&env);
         let current_ledger = env.ledger().sequence();
         current_ledger >= expiry_ledger
@@ -231,6 +248,7 @@ impl EphemeralAccountContract {
 
     /// Get the contract version stored at initialization.
     pub fn version(env: Env) -> u32 {
+        storage::extend_instance_ttl(&env);
         storage::get_contract_version(&env)
     }
 
@@ -239,6 +257,8 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return AccountStatus::Active;
         }
+
+        storage::extend_instance_ttl(&env);
         storage::get_status(&env)
     }
 
@@ -250,6 +270,10 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
+
+        storage::extend_instance_ttl(&env);
+
+        // Check not already swept or expired
         let status = storage::get_status(&env);
         if status == AccountStatus::Swept || status == AccountStatus::Expired {
             return Err(Error::InvalidStatus);
@@ -284,6 +308,9 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
+
+        storage::extend_instance_ttl(&env);
+
         let status = storage::get_status(&env);
         if status != AccountStatus::Swept && status != AccountStatus::Expired {
             return Err(Error::InvalidStatus);
@@ -298,6 +325,8 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return 0;
         }
+
+        storage::extend_instance_ttl(&env);
         storage::get_base_reserve_remaining(&env)
     }
 
@@ -306,6 +335,8 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return 0;
         }
+
+        storage::extend_instance_ttl(&env);
         storage::get_available_reserve(&env)
     }
 
@@ -314,6 +345,8 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return false;
         }
+
+        storage::extend_instance_ttl(&env);
         storage::is_reserve_reclaimed(&env)
     }
 
@@ -322,6 +355,8 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return None;
         }
+
+        storage::extend_instance_ttl(&env);
         storage::get_last_reserve_event(&env)
     }
 
@@ -330,6 +365,8 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return 0;
         }
+
+        storage::extend_instance_ttl(&env);
         storage::get_reserve_event_count(&env)
     }
 
@@ -338,6 +375,9 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
+
+        storage::extend_instance_ttl(&env);
+
         let payments = storage::get_all_payments(&env);
         let payment_count = payments.len();
         Ok(AccountInfo {

@@ -34,6 +34,7 @@ The Bridgelet Core system is designed to operate in a trust-minimized environmen
     *   **Ledger-based Expiration**: Expiration is tied to the Stellar ledger sequence number, providing an objective time source.
     *   **Guard Clauses**: The `sweep` function explicitly checks `is_expired()` and fails if the account has passed its expiry ledger.
     *   **Recovery Mechanism**: After expiration, the `expire()` function allows funds to be recovered to a pre-defined `recovery_address`, preventing funds from being permanently locked.
+    *   **TTL Extension**: Both `EphemeralAccount` and `SweepController` automatically extend their instance storage TTL on every public entry-point call, preventing archival during periods of inactivity. The SDK also extends TTL periodically for accounts still within their expiry window.
 
 ### 4. Malicious Account Initialization
 *   **Threat**: An attacker initializes an account with a past expiry or invalid parameters.
