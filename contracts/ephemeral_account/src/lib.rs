@@ -7,7 +7,7 @@ mod storage;
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, xdr::ToXdr, Address, BytesN, Env, Vec};
 
 pub use bridgelet_shared::{AccountInfo, AccountStatus, Payment};
 pub use errors::Error;
@@ -28,9 +28,10 @@ impl EphemeralAccountContract {
     /// Initialize the ephemeral account with restrictions
     ///
     /// # Arguments
-    /// * `creator` - Address that created this account
+    /// * `creator` - Address that created this account (must sign this call)
     /// * `expiry_ledger` - Ledger number when account expires
     /// * `recovery_address` - Address to return funds if expired
+    /// * `authorized_signer` - Ed25519 public key (32 bytes) whose signatures authorize sweeps
     ///
     /// # Errors
     /// Returns Error::AlreadyInitialized if called more than once
@@ -39,7 +40,8 @@ impl EphemeralAccountContract {
         creator: Address,
         expiry_ledger: u32,
         recovery_address: Address,
-        authorized_controller: Address,
+        authorized_signer: BytesN<32>,
+        min_amount: i128,
     ) -> Result<(), Error> {
         // Check if already initialized
         if storage::is_initialized(&env) {
@@ -50,12 +52,25 @@ impl EphemeralAccountContract {
         creator.require_auth();
 
         storage::extend_instance_ttl(&env);
+        // Validate expiry is in future
+        let current_ledger = env.ledger().sequence();
+        if expiry_ledger <= current_ledger {
+            return Err(Error::InvalidExpiry);
+        }
+
+        // Validate min_amount is non-negative
+        if min_amount < 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        // Store initialization data
         storage::set_initialized(&env, true);
         storage::set_creator(&env, &creator);
         storage::set_expiry_ledger(&env, expiry_ledger);
         storage::set_recovery_address(&env, &recovery_address);
         storage::set_status(&env, AccountStatus::Active);
-        storage::set_authorized_controller(&env, &authorized_controller);
+        storage::set_authorized_signer(&env, &authorized_signer);
+        storage::set_min_payment_amount(&env, min_amount);
         storage::init_reserve_tracking(&env, BASE_RESERVE_STROOPS);
         storage::set_contract_version(&env, CONTRACT_VERSION);
 
@@ -86,6 +101,12 @@ impl EphemeralAccountContract {
         // Validate amount
         if amount <= 0 {
             return Err(Error::InvalidAmount);
+        }
+
+        // Check minimum payment amount
+        let min_amount = storage::get_min_payment_amount(&env);
+        if amount < min_amount {
+            return Err(Error::PaymentBelowMinimum);
         }
 
         // Check for duplicate asset
@@ -393,13 +414,30 @@ impl EphemeralAccountContract {
 
     // Private helper functions
 
+    /// Verify sweep authorization via Ed25519 signature.
+    ///
+    /// Message = SHA-256(destination_xdr || contract_id_xdr)
+    ///
+    /// The off-chain signer signs this message with the private key
+    /// corresponding to the `authorized_signer` stored at initialization.
     fn verify_sweep_authorization(
         env: &Env,
-        _destination: &Address,
-        _signature: &BytesN<64>,
+        destination: &Address,
+        signature: &BytesN<64>,
     ) -> Result<(), Error> {
-        let controller = storage::get_authorized_controller(env).ok_or(Error::Unauthorized)?;
-        controller.require_auth();
+        let signer = storage::get_authorized_signer(env).ok_or(Error::Unauthorized)?;
+
+        // Construct deterministic message: sha256(destination_xdr || contract_id_xdr)
+        let mut msg = soroban_sdk::Bytes::new(env);
+        msg.append(&destination.to_xdr(env));
+        msg.append(&env.current_contract_address().to_xdr(env));
+        let message_hash: BytesN<32> = env.crypto().sha256(&msg).into();
+
+        // Panics (and reverts the tx) if the signature is invalid — this is the
+        // correct Soroban pattern; no need to wrap in a separate error branch.
+        env.crypto()
+            .ed25519_verify(&signer, &message_hash.into(), signature);
+
         Ok(())
     }
 

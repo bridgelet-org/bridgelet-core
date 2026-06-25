@@ -9,51 +9,43 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
+    - uses: actions/checkout@v4
+
+    - name: Install Rust (pinned via rust-toolchain.toml)
+      uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: stable
-        target: wasm32-unknown-unknown
-        override: true
-        
+        toolchain: "1.88.0"
+        targets: wasm32-unknown-unknown
+        components: rustfmt,clippy
+
     - name: Cache cargo registry
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        
-    - name: Cache cargo index
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-        
-    - name: Cache target directory
-      uses: actions/cache@v3
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    - name: Cache build artifacts
+      uses: actions/cache@v4
       with:
         path: target
         key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
-        
-    - name: Run tests
-      run: |
-        cd contracts/ephemeral_account
-        cargo test --verbose
-        
+        restore-keys: |
+          ${{ runner.os }}-target-
+
     - name: Check format
-      run: |
-        cd contracts/ephemeral_account
-        cargo fmt -- --check
-        
+      run: cargo fmt --all -- --check
+
     - name: Run clippy
-      run: |
-        cd contracts/ephemeral_account
-        cargo clippy -- -D warnings
-        
-    - name: Build contracts
-      run: |
-        cd contracts/ephemeral_account
-        cargo build --target wasm32-unknown-unknown --release
+      run: cargo clippy --workspace -- -D warnings
+
+    - name: Run tests
+      run: cargo test --workspace --verbose
+
+    - name: Build contracts (WASM)
+      run: cargo build --workspace --target wasm32-unknown-unknown --release
