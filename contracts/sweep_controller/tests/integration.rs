@@ -85,7 +85,7 @@ fn test_execute_sweep_with_valid_signature() {
     let expiry = env.ledger().sequence() + 1000;
 
     // Initialize ephemeral account, authorizing this SweepController to call sweep()
-    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &Address::generate(&env));
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -130,7 +130,7 @@ fn test_execute_sweep_with_invalid_signature() {
     let expiry = env.ledger().sequence() + 1000;
 
     // Initialize ephemeral account, authorizing this SweepController to call sweep()
-    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &Address::generate(&env));
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -169,7 +169,7 @@ fn test_sweep_without_payment() {
     let expiry = env.ledger().sequence() + 1000;
 
     // Initialize but don't record payment
-    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &Address::generate(&env));
 
     // Should panic - no payment received
     let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
@@ -213,7 +213,7 @@ fn test_can_sweep() {
     let expiry = env.ledger().sequence() + 1000;
 
     // Initialize, authorizing this SweepController to call sweep()
-    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &Address::generate(&env));
 
     // Should return false without payment
     assert!(!controller_client.can_sweep(&ephemeral_id));
@@ -261,7 +261,7 @@ fn test_wrong_signer_rejected() {
     let expiry = env.ledger().sequence() + 1000;
 
     // Initialize ephemeral account, authorizing this SweepController to call sweep()
-    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &Address::generate(&env));
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -298,7 +298,7 @@ fn test_unauthorized_signer_not_set() {
     let expiry = env.ledger().sequence() + 1000;
 
     // Initialize ephemeral account, authorizing this (uninitialized) SweepController to call sweep()
-    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &Address::generate(&env));
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -375,7 +375,7 @@ fn test_sweep_to_authorized_destination() {
     let expiry = env.ledger().sequence() + 1000;
 
     // Initialize ephemeral account, authorizing this SweepController to call sweep()
-    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &Address::generate(&env));
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -421,7 +421,7 @@ fn test_sweep_to_unauthorized_destination() {
     let expiry = env.ledger().sequence() + 1000;
 
     // Initialize ephemeral account, authorizing this SweepController to call sweep()
-    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &Address::generate(&env));
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -516,7 +516,7 @@ fn test_update_destination_before_sweep() {
     let asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
 
-    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &Address::generate(&env));
     ephemeral_client.record_payment(&100, &asset);
 
     let auth_sig = BytesN::from_array(&env, &[1u8; 64]);
