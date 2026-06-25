@@ -23,6 +23,8 @@ pub enum DataKey {
     /// Ed25519 public key (32 bytes) that must sign sweep authorizations.
     AuthorizedSigner,
     ContractVersion,
+    /// Relayer address authorized to call record_payment().
+    Relayer,
     MinPaymentAmount,
 }
 
@@ -233,4 +235,13 @@ pub fn set_authorized_signer(env: &Env, signer: &BytesN<32>) {
 }
 pub fn get_authorized_controller(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::AuthorizedController)
+}
+
+// Relayer — the only address authorized to call record_payment()
+pub fn set_relayer(env: &Env, relayer: &Address) {
+    env.storage().instance().set(&DataKey::Relayer, relayer);
+}
+
+pub fn get_relayer(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::Relayer)
 }
