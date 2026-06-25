@@ -15,6 +15,9 @@ soroban-token-sdk = "22.0.0"
 
 [dev-dependencies]
 soroban-sdk = { version = "22.0.0", features = ["testutils"] }
+ed25519-dalek = "2"
+sha2 = "0.10"
+rand = "0.8"
 
 
 [profile.release]

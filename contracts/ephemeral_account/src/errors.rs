@@ -19,4 +19,5 @@ pub enum Error {
     DuplicateAsset = 13,
     TooManyPayments = 14,
     PaymentBelowMinimum = 15,
+    SweepDestinationLocked = 16,
 }
