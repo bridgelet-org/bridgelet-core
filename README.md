@@ -2,9 +2,7 @@
 
 **Soroban smart contracts for ephemeral account restrictions**
 
-**MVP Status**
-> 🚧 **MVP — Active Development:** Authorization and token transfer layers are not yet 
-> implemented on-chain. See [MVP Status](#mvp-status) for details.
+**Status:** Active Development
 
 ## Overview
 
@@ -116,7 +114,6 @@ pub trait EphemeralAccountInterface {
     fn is_expired(env: Env) -> bool;
 }
 ```
-> **⚠️ MVP:**  **authorization is not yet enforced on-chain.
 
 See [Bridgelet Documentation](https://github.com/bridgelet-org/bridgelet) for full API reference.
 
@@ -145,6 +142,10 @@ See [Security Audit Report](./docs/security-audit.md) (coming soon)
 - [API Reference](./docs/api-reference.md)
 - [Security Model](./docs/security.md)
 - [Testing Guide](./docs/testing.md)
+- [Storage Layout](./docs/STORAGE_LAYOUT.md)
+- [Error Catalogue](./docs/ERROR_CATALOGUE.md)
+- [Contributing Guide](./CONTRIBUTING.md)
+- [Changelog](./CHANGELOG.md)
 
 ## License
 

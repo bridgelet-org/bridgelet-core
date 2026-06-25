@@ -4,6 +4,15 @@ This document outlines the security considerations, threat model, authorization 
 
 ## Threat Model
 
+| Threat | Attacker | Mitigation | Status |
+|---|---|---|---|
+| **Unauthorized sweep** | External attacker / rogue SDK | Ed25519 signature required by SweepController + destination locking | Implemented |
+| **Double-claim** | Replay of a valid sweep call | State machine enforces Active→Swept one-way transition (AlreadySwept error #7) + monotonic nonce on SweepController | Implemented |
+| **Dust attack** | Micro-payment spam to exhaust asset slots | Max 10 assets enforced (TooManyPayments error #14) | Implemented |
+| **Frontrunning** | Miner/validator reorders sweep tx | Signature binds destination + nonce + contract_id; reordering doesn't help attacker | Partially mitigated |
+| **Replay attack** | Reuse of a sweep signature on another account/network | Nonce incremented after each sweep; signature covers contract_id and destination | Implemented |
+| **Upgrade authority abuse** | Unauthorized contract upgrade replacing logic | Soroban contracts are immutable by default; no upgrade authority is set | Implemented |
+
 The Bridgelet Core system is designed to operate in a trust-minimized environment. The following threat vectors have been considered and mitigated:
 
 ### 1. Unauthorized Sweeping

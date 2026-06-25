@@ -18,7 +18,5 @@ pub enum Error {
     InvalidStatus = 12,
     DuplicateAsset = 13,
     TooManyPayments = 14,
-    /// The sweep destination is locked to the address set on the first sweep call.
-    /// Any subsequent sweep attempt with a different destination is rejected.
-    SweepDestinationLocked = 15,
+    PaymentBelowMinimum = 15,
 }
