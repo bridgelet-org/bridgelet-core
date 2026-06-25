@@ -15,6 +15,8 @@ pub use events::{
 };
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 pub use storage::DataKey;
+
+use soroban_sdk::{contract, contractimpl, token, Address, BytesN, Env, Vec};
 const BASE_RESERVE_STROOPS: i128 = 1_000_000_000;
 const CONTRACT_VERSION: u32 = 1;
 #[contract]
@@ -41,13 +43,10 @@ impl EphemeralAccountContract {
         authorized_signer: BytesN<32>,
         min_amount: i128,
     ) -> Result<(), Error> {
-        // Check if already initialized
         if storage::is_initialized(&env) {
             return Err(Error::AlreadyInitialized);
         }
-        // Verify creator authorization
         creator.require_auth();
-        // Validate expiry is in future
         let current_ledger = env.ledger().sequence();
         if expiry_ledger <= current_ledger {
             return Err(Error::InvalidExpiry);
@@ -70,15 +69,12 @@ impl EphemeralAccountContract {
         storage::set_min_payment_amount(&env, min_amount);
         storage::init_reserve_tracking(&env, BASE_RESERVE_STROOPS);
         storage::set_contract_version(&env, CONTRACT_VERSION);
-        // Emit event
         events::emit_account_created(&env, creator, expiry_ledger);
         Ok(())
     }
 
-    /// Record a single inbound payment to this ephemeral account.
-    ///
-    /// Each account is restricted to **one** payment. A second call will revert
-    /// with [`Error::PaymentAlreadyReceived`] regardless of the asset.
+    /// Record an inbound payment to this ephemeral account.
+    /// Multiple payments with different assets are supported.
     ///
     /// # Arguments
     /// * `amount` - Payment amount (must be positive)
@@ -89,11 +85,9 @@ impl EphemeralAccountContract {
     /// * [`Error::InvalidAmount`] – amount is not positive
     /// * [`Error::PaymentAlreadyReceived`] – a payment was already recorded
     pub fn record_payment(env: Env, amount: i128, asset: Address) -> Result<(), Error> {
-        // Check initialized
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
-        // Validate amount
         if amount <= 0 {
             return Err(Error::InvalidAmount);
         }
@@ -112,26 +106,33 @@ impl EphemeralAccountContract {
         if storage::get_payment(&env, &asset).is_some() {
             return Err(Error::DuplicateAsset);
         }
-        // Create payment with current timestamp
+        let payment_count = storage::get_total_payments(&env);
+        if payment_count >= 10 {
+            return Err(Error::TooManyPayments);
+        }
         let payment = Payment {
             asset: asset.clone(),
             amount,
             timestamp: env.ledger().timestamp(),
         };
-        // Add payment
         storage::add_payment(&env, payment);
-        // Update status
-        storage::set_status(&env, AccountStatus::PaymentReceived);
-        // Emit event
-        events::emit_payment_received(&env, amount, asset);
+        if payment_count == 0 {
+            storage::set_status(&env, AccountStatus::PaymentReceived);
+        }
+        if payment_count == 0 {
+            events::emit_payment_received(&env, amount, asset);
+        } else {
+            events::emit_multi_payment_received(&env, asset, amount);
+        }
         Ok(())
     }
 
     /// Execute sweep to destination wallet.
     ///
-    /// On the first successful call the `destination` is persisted as the locked
-    /// sweep destination for this account. Any subsequent call with a different
-    /// destination is rejected with [`Error::SweepDestinationLocked`].
+    /// Transfers all recorded asset balances from this contract to `destination`
+    /// using the Soroban [`token::TokenClient`] interface. The status is updated
+    /// to [`AccountStatus::Swept`] before the transfers to prevent re-entrancy;
+    /// any token call that panics will revert the entire transaction.
     ///
     /// # Arguments
     /// * `destination` - Recipient wallet address
@@ -139,22 +140,19 @@ impl EphemeralAccountContract {
     ///
     /// # Errors
     /// * [`Error::AlreadySwept`] — sweep has already been executed
-    /// * [`Error::SweepDestinationLocked`] — destination differs from the locked address
+    /// * [`Error::NoPaymentReceived`] — no payment recorded yet
+    /// * [`Error::AccountExpired`] — account has passed its expiry ledger
     /// * [`Error::Unauthorized`] — authorization check failed
     pub fn sweep(env: Env, destination: Address, auth_signature: BytesN<64>) -> Result<(), Error> {
-        // Check initialized
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
-        // Check not already swept
         if storage::get_status(&env) == AccountStatus::Swept {
             return Err(Error::AlreadySwept);
         }
-        // Check payment received
         if !storage::has_payment_received(&env) {
             return Err(Error::NoPaymentReceived);
         }
-        // Check not expired
         if Self::is_expired(env.clone()) {
             return Err(Error::AccountExpired);
         }
@@ -170,13 +168,12 @@ impl EphemeralAccountContract {
             storage::set_sweep_destination(&env, &destination);
         }
         Self::verify_sweep_authorization(&env, &destination, &auth_signature)?;
-        // Get all payments
         let payments = storage::get_all_payments(&env);
         let mut payments_vec = Vec::new(&env);
         for payment in payments.values() {
             payments_vec.push_back(payment);
         }
-        // Update status before transfer to prevent reentrancy
+        // Update status before transfers to prevent re-entrancy.
         storage::set_status(&env, AccountStatus::Swept);
         storage::set_swept_to(&env, &destination);
 
@@ -184,24 +181,24 @@ impl EphemeralAccountContract {
         // This contract enforces authorization/state transitions and reserve lifecycle.
         let sweep_id = env.ledger().sequence() as u64;
         storage::set_last_sweep_id(&env, sweep_id);
-        // Emit sweep event once transfer authorization/state update succeeds.
+        // Execute on-chain token transfers for every recorded payment.
+        let contract_address = env.current_contract_address();
+        for payment in payments_vec.iter() {
+            token::TokenClient::new(&env, &payment.asset).transfer(
+                &contract_address,
+                &destination,
+                &payment.amount,
+            );
+        }
         events::emit_sweep_executed_multi(&env, destination.clone(), &payments_vec);
-        // Reclaim base reserve only after successful sweep state transition.
         Self::reclaim_reserve_to(&env, &destination, sweep_id)?;
         Ok(())
     }
 
     /// Check if the account has expired.
     ///
-    /// Expiry is determined by comparing the current **ledger sequence number**
-    /// (`env.ledger().sequence()`) against the `expiry_ledger` set at
-    /// initialization. Soroban contracts do not have access to wall-clock time
-    /// (UNIX timestamps) for consensus-safe comparisons; ledger sequence is the
-    /// canonical on-chain time source. Each ledger closes roughly every 5 s on
-    /// Stellar mainnet, so `expiry_ledger` effectively encodes a duration in
-    /// ledger ticks rather than seconds.
-    ///
-    /// Returns `false` if the account has not been initialized.
+    /// Expiry is determined by comparing `env.ledger().sequence()` against
+    /// `expiry_ledger`. Returns `false` if the account is not initialized.
     /// Check whether this ephemeral account has expired.
     ///
     /// ## Ledger time vs wall-clock time
@@ -232,12 +229,12 @@ impl EphemeralAccountContract {
         current_ledger >= expiry_ledger
     }
 
-    /// Get the contract version stored at initialization
+    /// Get the contract version stored at initialization.
     pub fn version(env: Env) -> u32 {
         storage::get_contract_version(&env)
     }
 
-    /// Get current account status
+    /// Get current account status.
     pub fn get_status(env: Env) -> AccountStatus {
         if !storage::is_initialized(&env) {
             return AccountStatus::Active;
@@ -245,31 +242,24 @@ impl EphemeralAccountContract {
         storage::get_status(&env)
     }
 
-    /// Expire the account and return funds to recovery address
-    /// Can only be called after expiry ledger is reached
+    /// Expire the account and return funds to recovery address.
     ///
     /// # Errors
     /// Returns Error::NotExpired if called before expiry ledger
     pub fn expire(env: Env) -> Result<(), Error> {
-        // Check initialized
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
-        // Check not already swept or expired
         let status = storage::get_status(&env);
         if status == AccountStatus::Swept || status == AccountStatus::Expired {
             return Err(Error::InvalidStatus);
         }
-        // Check if expired
         if !Self::is_expired(env.clone()) {
             return Err(Error::NotExpired);
         }
-        // Get recovery address
         let recovery_address = storage::get_recovery_address(&env);
-        // Update status
         storage::set_status(&env, AccountStatus::Expired);
         storage::set_swept_to(&env, &recovery_address);
-        // Get total amount from all payments if any payments were received
         let total_amount = if storage::has_payment_received(&env) {
             let payments = storage::get_all_payments(&env);
             let mut total = 0i128;
@@ -284,15 +274,12 @@ impl EphemeralAccountContract {
         };
         let sweep_id = env.ledger().sequence() as u64;
         storage::set_last_sweep_id(&env, sweep_id);
-        // Reclaim reserve to recovery destination.
         let reclaimed_reserve = Self::reclaim_reserve_to(&env, &recovery_address, sweep_id)?;
-        // Emit expiration event with reserve amount reclaimed in this call.
         events::emit_account_expired(&env, recovery_address, total_amount, reclaimed_reserve);
         Ok(())
     }
 
     /// Reclaim remaining base reserve for a previously swept/expired account.
-    /// This is safe to call repeatedly: once fully reclaimed, subsequent calls transfer 0.
     pub fn reclaim_reserve(env: Env) -> Result<i128, Error> {
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
@@ -346,7 +333,7 @@ impl EphemeralAccountContract {
         storage::get_reserve_event_count(&env)
     }
 
-    /// Get account information
+    /// Get account information.
     pub fn get_info(env: Env) -> Result<AccountInfo, Error> {
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
@@ -371,7 +358,6 @@ impl EphemeralAccountContract {
         })
     }
 
-    // Private helper functions
     fn verify_sweep_authorization(
         env: &Env,
         destination: &Address,
