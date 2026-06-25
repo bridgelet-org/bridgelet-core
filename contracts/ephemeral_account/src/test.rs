@@ -333,11 +333,12 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
         let asset1 = Address::generate(&env);
         let asset2 = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
 
         // Record two payments that would overflow i128 when summed
         client.record_payment(&i128::MAX, &asset1);
@@ -487,6 +488,7 @@ mod test {
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
         let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
 
         // Advance ledger so we can clearly pass a past expiry
         env.ledger().with_mut(|l| {
@@ -495,6 +497,6 @@ mod test {
 
         // expiry_ledger <= current ledger (50 <= 100) -- should return InvalidExpiry (#5)
         let expired_ledger = 50u32;
-        client.initialize(&creator, &expired_ledger, &recovery, &controller);
+        client.initialize(&creator, &expired_ledger, &recovery, &controller, &relayer);
     }
 }
