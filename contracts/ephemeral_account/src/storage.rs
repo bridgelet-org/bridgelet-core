@@ -238,7 +238,7 @@ pub fn get_min_payment_amount(env: &Env) -> i128 {
 }
 
 // Authorized controller
-pub fn set_authorized_controller(env: &Env, controller: &Address) {
+pub fn set_authorized_signer(env: &Env, signer: &BytesN<32>) {
     env.storage()
         .instance()
         .set(&DataKey::AuthorizedSigner, signer);
