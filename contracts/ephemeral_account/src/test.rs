@@ -55,6 +55,11 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         let signer = test_signer_pubkey(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
@@ -77,6 +82,11 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         let signer = test_signer_pubkey(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
@@ -95,6 +105,12 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         let signer = test_signer_pubkey(&env);
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
@@ -115,11 +131,14 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
         let signer = test_signer_pubkey(&env);
         let asset1 = Address::generate(&env);
         let asset2 = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         client.initialize(&creator, &expiry_ledger, &recovery, &signer, &1i128);
 
         client.record_payment(&100, &asset1);
@@ -143,11 +162,14 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
         let signer = test_signer_pubkey(&env);
         let asset = Address::generate(&env);
         let destination = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         client.initialize(&creator, &expiry_ledger, &recovery, &signer, &1i128);
         client.record_payment(&100, &asset);
 
@@ -177,6 +199,12 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         let signer = test_signer_pubkey(&env);
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
@@ -220,6 +248,12 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
+        let destination = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         let signer = test_signer_pubkey(&env);
         let destination = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
@@ -256,11 +290,14 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
         let signer = test_signer_pubkey(&env);
         let destination = Address::generate(&env);
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         client.initialize(&creator, &expiry_ledger, &recovery, &signer, &1i128);
         client.record_payment(&100, &asset);
 
@@ -292,11 +329,14 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
         let signer = test_signer_pubkey(&env);
         let destination = Address::generate(&env);
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         client.initialize(&creator, &expiry_ledger, &recovery, &signer, &1i128);
         client.record_payment(&100, &asset);
 
@@ -351,11 +391,14 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
         let signer = test_signer_pubkey(&env);
         let asset1 = Address::generate(&env);
         let asset2 = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1;
 
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         client.initialize(&creator, &expiry_ledger, &recovery, &signer, &1i128);
 
         // Record two payments that would overflow i128 when summed
@@ -386,6 +429,8 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
         let signer = test_signer_pubkey(&env);
         let destination = Address::generate(&env);
         let asset = Address::generate(&env);
@@ -422,6 +467,12 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 10;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         let signer = test_signer_pubkey(&env);
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 10;
@@ -454,6 +505,11 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &relayer);
         let signer = test_signer_pubkey(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
@@ -516,6 +572,8 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
         let signer = test_signer_pubkey(&env);
         let asset = Address::generate(&env);
         let destination = Address::generate(&env);
@@ -542,6 +600,8 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let relayer = Address::generate(&env);
         let signer = test_signer_pubkey(&env);
 
         // Advance ledger so we can clearly pass a past expiry
