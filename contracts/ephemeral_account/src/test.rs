@@ -5,10 +5,13 @@ mod test {
     use std::println;
 
     use crate::{
-        storage, AccountStatus, EphemeralAccountContract, EphemeralAccountContractClient,
-        Error, ReserveReclaimed,
+        storage, AccountStatus, EphemeralAccountContract, EphemeralAccountContractClient, Error,
+        ReserveReclaimed,
     };
-    use soroban_sdk::{testutils::{Address as _, Ledger as _}, Address, BytesN, Env, InvokeError};
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger as _},
+        Address, BytesN, Env, InvokeError,
+    };
 
     const BASE_RESERVE_STROOPS: i128 = 1_000_000_000;
 
