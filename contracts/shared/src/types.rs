@@ -32,3 +32,20 @@ pub struct AccountInfo {
     pub payments: Vec<Payment>,
     pub swept_to: Option<Address>,
 }
+
+/// Request to initialize a single ephemeral account
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct AccountInitRequest {
+    pub expiry_ledger: u32,
+    pub recovery_address: Address,
+}
+
+/// Result of initializing an ephemeral account
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct AccountInitResult {
+    pub account_address: Address,
+    pub success: bool,
+    pub error: Option<Vec<u8>>,
+}
