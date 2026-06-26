@@ -20,6 +20,9 @@ jobs:
         target: wasm32-unknown-unknown
         override: true
         
+    - name: Install soroban-cli
+      run: cargo install --locked soroban-cli --version 22.0.0
+        
     - name: Cache cargo registry
       uses: actions/cache@v3
       with:
@@ -53,7 +56,21 @@ jobs:
         cd contracts/ephemeral_account
         cargo clippy -- -D warnings
         
-    - name: Build contracts
+    - name: Build all contracts
       run: |
         cd contracts/ephemeral_account
         cargo build --target wasm32-unknown-unknown --release
+        cd ../sweep_controller
+        cargo build --target wasm32-unknown-unknown --release
+        cd ../reserve_contract
+        cargo build --target wasm32-unknown-unknown --release
+        
+    - name: Upload WASM artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: wasm-contracts
+        path: |
+          contracts/ephemeral_account/target/wasm32-unknown-unknown/release/*.wasm
+          contracts/sweep_controller/target/wasm32-unknown-unknown/release/*.wasm
+          contracts/reserve_contract/target/wasm32-unknown-unknown/release/*.wasm
+        retention-days: 30
