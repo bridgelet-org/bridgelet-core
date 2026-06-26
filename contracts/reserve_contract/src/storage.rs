@@ -33,9 +33,7 @@ pub enum DataKey {
 /// * `amount` – Base reserve in stroops.  Must already be validated as
 ///              positive by the caller.
 pub fn set_base_reserve(env: &Env, amount: i128) {
-    env.storage()
-        .instance()
-        .set(&DataKey::BaseReserve, &amount);
+    env.storage().instance().set(&DataKey::BaseReserve, &amount);
 }
 
 /// Read the base reserve amount from contract storage.

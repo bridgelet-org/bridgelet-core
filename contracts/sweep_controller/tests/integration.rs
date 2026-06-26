@@ -75,7 +75,7 @@ fn test_execute_sweep_with_valid_signature() {
     let ephemeral_id = env.register(EphemeralAccountContract, ());
     let ephemeral_client = EphemeralAccountContractClient::new(&env, &ephemeral_id);
 
-// Setup
+    // Setup
     let creator = Address::generate(&env);
     let recovery = Address::generate(&env);
     let destination = Address::generate(&env);
@@ -227,7 +227,10 @@ fn test_wrong_signer_rejected() {
 
     // Should fail due to signature verification
     assert!(result.is_err());
-    println!("Execute sweep with dummy signature correctly failed: {:?}", result);
+    println!(
+        "Execute sweep with dummy signature correctly failed: {:?}",
+        result
+    );
 }
 
 /// Test that sweep controller requires initialization
@@ -244,7 +247,7 @@ fn test_unauthorized_signer_not_set() {
     let ephemeral_id = env.register(EphemeralAccountContract, ());
     let ephemeral_client = EphemeralAccountContractClient::new(&env, &ephemeral_id);
 
-// Setup
+    // Setup
     let creator = Address::generate(&env);
     let recovery = Address::generate(&env);
     let destination = Address::generate(&env);
@@ -267,7 +270,10 @@ fn test_unauthorized_signer_not_set() {
 
     // Should fail because authorized_signer is not set
     assert!(result.is_err());
-    println!("Execute sweep without initialization correctly failed: {:?}", result);
+    println!(
+        "Execute sweep without initialization correctly failed: {:?}",
+        result
+    );
 }
 
 /// Test initialization with authorized destination (locked mode)
@@ -345,7 +351,10 @@ fn test_sweep_to_authorized_destination() {
 
     // Should fail due to signature verification, not destination validation
     assert!(result.is_err());
-    println!("Sweep to authorized destination with dummy signature correctly failed: {:?}", result);
+    println!(
+        "Sweep to authorized destination with dummy signature correctly failed: {:?}",
+        result
+    );
 }
 
 /// Test sweep to unauthorized destination (failure)
