@@ -118,6 +118,35 @@ cargo test --test integration
 ./scripts/test-local.sh
 ```
 
+## CI/CD
+
+### Automated Testing
+- **Test Workflow** (`.github/workflows/test.yml`): Runs on every push to `main`/`develop` and on PRs to `main`
+  - Runs cargo tests for all contracts
+  - Checks code formatting with `cargo fmt`
+  - Runs clippy for linting
+  - Builds all contracts for wasm32-unknown-unknown target
+  - Uploads WASM artifacts for deployment
+
+### Automated Testnet Deployment
+- **Deploy Workflow** (`.github/workflows/deploy-testnet.yml`): Automatically deploys to Stellar Testnet on merge to `main`
+  - Runs tests, format checks, clippy, and builds before deployment
+  - Deploys all three contracts: `ephemeral_account`, `sweep_controller`, `reserve_contract`
+  - Stores contract IDs as CI artifacts (90-day retention)
+  - Posts deployment summary with contract IDs to GitHub Actions summary
+  - Can also be triggered manually via `workflow_dispatch`
+
+#### Required GitHub Secrets
+To enable automated deployments, add the following secret to your GitHub repository:
+- `TESTNET_DEPLOYER_SECRET_KEY`: Stellar testnet deployer secret key (S... format)
+
+#### Manual Deployment
+To trigger a manual deployment:
+1. Go to Actions tab in GitHub
+2. Select "Deploy to Testnet" workflow
+3. Click "Run workflow"
+4. Optionally provide a reason for the deployment
+
 ## Contract Interfaces
 
 ### EphemeralAccount

@@ -1,14 +1,17 @@
-name: Test Contracts
+name: Deploy to Testnet
 
 on:
   push:
-    branches: [ main, develop ]
-  pull_request:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual deployment'
+        required: false
+        default: 'Manual deployment trigger'
 
 jobs:
-  test:
-    name: Test Contracts
+  deploy:
     runs-on: ubuntu-latest
     
     steps:
@@ -41,7 +44,7 @@ jobs:
       with:
         path: target
         key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
-        
+    
     - name: Run tests
       run: |
         cd contracts/ephemeral_account
@@ -50,7 +53,7 @@ jobs:
         cargo test --verbose
         cd ../reserve_contract
         cargo test --verbose
-        
+    
     - name: Check format
       run: |
         cd contracts/ephemeral_account
@@ -59,7 +62,7 @@ jobs:
         cargo fmt -- --check
         cd ../reserve_contract
         cargo fmt -- --check
-        
+    
     - name: Run clippy
       run: |
         cd contracts/ephemeral_account
@@ -68,7 +71,7 @@ jobs:
         cargo clippy -- -D warnings
         cd ../reserve_contract
         cargo clippy -- -D warnings
-        
+    
     - name: Build all contracts
       run: |
         cd contracts/ephemeral_account
@@ -77,13 +80,28 @@ jobs:
         cargo build --target wasm32-unknown-unknown --release
         cd ../reserve_contract
         cargo build --target wasm32-unknown-unknown --release
-        
-    - name: Upload WASM artifacts
+    
+    - name: Deploy to Stellar Testnet
+      env:
+        DEPLOYER_SECRET_KEY: ${{ secrets.TESTNET_DEPLOYER_SECRET_KEY }}
+      run: |
+        chmod +x scripts/deploy-testnet.sh
+        ./scripts/deploy-testnet.sh
+    
+    - name: Upload contract IDs as artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: wasm-contracts
-        path: |
-          contracts/ephemeral_account/target/wasm32-unknown-unknown/release/*.wasm
-          contracts/sweep_controller/target/wasm32-unknown-unknown/release/*.wasm
-          contracts/reserve_contract/target/wasm32-unknown-unknown/release/*.wasm
-        retention-days: 30
+        name: contract-ids
+        path: deployment-artifacts/contract-ids.txt
+        retention-days: 90
+    
+    - name: Post deployment summary
+      run: |
+        echo "## 🚀 Testnet Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Contracts have been successfully deployed to Stellar Testnet!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Contract IDs" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        cat deployment-artifacts/contract-ids.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
