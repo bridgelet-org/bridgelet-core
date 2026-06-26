@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Vec};
+use soroban_sdk::{contracttype, Address, Bytes, Vec};
 
 // Represents a payment received by the ephemeral account.
 #[contracttype]
@@ -47,5 +47,5 @@ pub struct AccountInitRequest {
 pub struct AccountInitResult {
     pub account_address: Address,
     pub success: bool,
-    pub error: Option<Vec<u8>>,
+    pub error: Option<Bytes>,
 }
