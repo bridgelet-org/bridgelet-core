@@ -17,6 +17,7 @@ pub enum DataKey {
     LastSweepId,
     ReserveEventCount,
     LastReserveEvent,
+    AuthorizedController,
 }
 
 // Initialization
@@ -203,4 +204,15 @@ pub fn set_last_reserve_event(env: &Env, event: &ReserveReclaimed) {
 
 pub fn get_last_reserve_event(env: &Env) -> Option<ReserveReclaimed> {
     env.storage().instance().get(&DataKey::LastReserveEvent)
+}
+
+// Authorized controller
+pub fn set_authorized_controller(env: &Env, controller: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::AuthorizedController, controller);
+}
+
+pub fn get_authorized_controller(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::AuthorizedController)
 }

@@ -20,6 +20,7 @@ Bridgelet Core contains the Soroban smart contracts that enforce single-use rest
 ### Implementation Notes
 
 - **EphemeralAccount::sweep()**: Currently uses Soroban's `require_auth()` for authorization instead of cryptographic Ed25519 signature verification. The signature parameters (`destination`, `auth_signature`) are accepted but not cryptographically verified. Production implementation should use `env.crypto().ed25519_verify()` similar to SweepController's implementation.
+- **SweepController::claim()**: Experimental gas-free claim path. The recipient signs a Soroban auth entry for `claim(recipient, ephemeral_account)`, and a relayer/SDK can submit the transaction and pay fees. Internally the controller uses `authorize_as_current_contract()` so the downstream `EphemeralAccount::sweep()` call can satisfy `authorized_controller.require_auth()`.
 - **SweepController::execute_transfers()**: Token transfer logic is fully implemented using SEP-41 token contracts. All recorded payments are transferred atomically to the destination.
 - **Security guidance**: Always route sweeps through `SweepController` for proper Ed25519 signature verification. Do not call `EphemeralAccount::sweep()` directly until the signature verification stub is replaced.
 

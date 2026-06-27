@@ -2,7 +2,7 @@
 
 use bridgelet_shared::{AccountInitRequest, AccountInitResult};
 use ephemeral_account::EphemeralAccountContractClient as EphemeralAccountClient;
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Vec};
 
 #[contract]
 pub struct AccountFactory;
@@ -45,11 +45,13 @@ impl AccountFactory {
 
         for (index, request) in requests.iter().enumerate() {
             // Deploy a new ephemeral account contract with unique salt
-            let salt = BytesN::from_array(&env, &(index as u32).to_be_bytes());
+            let mut salt_bytes = [0u8; 32];
+            salt_bytes[28..32].copy_from_slice(&(index as u32).to_be_bytes());
+            let salt = BytesN::from_array(&env, &salt_bytes);
             let account_address = env
                 .deployer()
                 .with_current_contract(salt)
-                .deploy(&wasm_hash);
+                .deploy_v2(wasm_hash.clone(), ());
 
             // Initialize it
             let client = EphemeralAccountClient::new(&env, &account_address);
@@ -58,6 +60,7 @@ impl AccountFactory {
                 &creator,
                 &request.expiry_ledger,
                 &request.recovery_address,
+                &creator,
             ) {
                 Ok(_) => AccountInitResult {
                     account_address: account_address.clone(),
