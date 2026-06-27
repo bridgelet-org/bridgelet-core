@@ -312,11 +312,8 @@ soroban --version
 ### Starting a Local Sandbox
 
 ```bash
-# Start local sandbox (runs in foreground)
-soroban sandbox start
-
-# Or run in background
-soroban sandbox start --background
+# Start local sandbox
+soroban container start local --name bridgelet-local
 ```
 
 The sandbox will start on:
@@ -369,10 +366,7 @@ The project includes test scripts in `scripts/`:
 ### Stopping the Sandbox
 
 ```bash
-# If running in foreground, use Ctrl+C
-
-# If running in background, find and kill the process
-pkill soroban-sandbox
+soroban container stop bridgelet-local
 ```
 
 ## Troubleshooting
@@ -478,11 +472,11 @@ rustup target list --installed | grep wasm32
 curl http://localhost:8000
 
 # Restart sandbox
-pkill soroban-sandbox
-soroban sandbox start --background
+soroban container stop bridgelet-local
+soroban container start local --name bridgelet-local
 
 # Check sandbox logs
-soroban sandbox logs
+soroban container logs bridgelet-local
 ```
 
 #### Test timeout or hangs

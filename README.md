@@ -1,14 +1,28 @@
-# Bridgelet Core
+ Bridgelet Core
 
 **Soroban smart contracts for ephemeral account restrictions**
 
-**MVP Status**
-> 🚧 **MVP — Active Development:** Authorization and token transfer layers are not yet 
-> implemented on-chain. See [MVP Status](#mvp-status) for details.
+**Status:** Active Development
 
 ## Overview
 
 Bridgelet Core contains the Soroban smart contracts that enforce single-use restrictions on ephemeral Stellar accounts and manage the sweep logic for transferring funds to permanent wallets.
+
+## MVP Status
+
+### Current Stub Inventory
+
+| Function | Contract | Stub Status | Production Requirement | Tracking Issue |
+|----------|----------|-------------|------------------------|----------------|
+| `verify_sweep_authorization` | EphemeralAccount | **Partial** - Uses `require_auth()` instead of Ed25519 signature verification | Implement `env.crypto().ed25519_verify()` against stored `authorized_signer` with signature covering destination + nonce + contract_id | #86 |
+| Token transfers | SweepController | **Implemented** - `execute_transfers()` calls `token.transfer()` for all assets | Already implemented in `transfers.rs` | N/A |
+
+### Implementation Notes
+
+- **EphemeralAccount::sweep()**: Currently uses Soroban's `require_auth()` for authorization instead of cryptographic Ed25519 signature verification. The signature parameters (`destination`, `auth_signature`) are accepted but not cryptographically verified. Production implementation should use `env.crypto().ed25519_verify()` similar to SweepController's implementation.
+- **SweepController::claim()**: Experimental gas-free claim path. The recipient signs a Soroban auth entry for `claim(recipient, ephemeral_account)`, and a relayer/SDK can submit the transaction and pay fees. Internally the controller uses `authorize_as_current_contract()` so the downstream `EphemeralAccount::sweep()` call can satisfy `authorized_controller.require_auth()`.
+- **SweepController::execute_transfers()**: Token transfer logic is fully implemented using SEP-41 token contracts. All recorded payments are transferred atomically to the destination.
+- **Security guidance**: Always route sweeps through `SweepController` for proper Ed25519 signature verification. Do not call `EphemeralAccount::sweep()` directly until the signature verification stub is replaced.
 
 ## Tech Stack
 
@@ -64,12 +78,24 @@ cargo install --locked soroban-cli --version 22.0.0
 
 # Add wasm target
 rustup target add wasm32-unknown-unknown
+
+# Install Binaryen (for WASM optimization)
+# Minimum required version: 100
+# macOS:
+brew install binaryen
+# Ubuntu/Debian:
+apt-get install binaryen
+# Or download from: https://github.com/WebAssembly/binaryen/releases
 ```
 
 ## Build & Deploy
 ```bash
-# Build contracts
+# Build contracts (with WASM optimization if binaryen is installed)
 ./scripts/build.sh
+
+# The build script automatically optimizes WASM files using wasm-opt -O3
+# if Binaryen is installed. This typically reduces binary size by 15-30%.
+# If wasm-opt is not found, the build continues without optimization.
 
 # Run tests
 cargo test
@@ -116,7 +142,6 @@ pub trait EphemeralAccountInterface {
     fn is_expired(env: Env) -> bool;
 }
 ```
-> **⚠️ MVP:**  **authorization is not yet enforced on-chain.
 
 See [Bridgelet Documentation](https://github.com/bridgelet-org/bridgelet) for full API reference.
 
