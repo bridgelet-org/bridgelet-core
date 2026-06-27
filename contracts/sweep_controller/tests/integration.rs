@@ -75,7 +75,7 @@ fn test_execute_sweep_with_valid_signature() {
     let ephemeral_id = env.register(EphemeralAccountContract, ());
     let ephemeral_client = EphemeralAccountContractClient::new(&env, &ephemeral_id);
 
-// Setup
+    // Setup
     let creator = Address::generate(&env);
     let recovery = Address::generate(&env);
     let destination = Address::generate(&env);
@@ -244,7 +244,7 @@ fn test_unauthorized_signer_not_set() {
     let ephemeral_id = env.register(EphemeralAccountContract, ());
     let ephemeral_client = EphemeralAccountContractClient::new(&env, &ephemeral_id);
 
-// Setup
+    // Setup
     let creator = Address::generate(&env);
     let recovery = Address::generate(&env);
     let destination = Address::generate(&env);
