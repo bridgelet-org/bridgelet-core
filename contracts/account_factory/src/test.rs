@@ -14,7 +14,7 @@ fn test_batch_initialize_flow() {
 
     // Deploy the ephemeral account contract to get its wasm (this is how you get wasm in tests)
     let ephemeral_account_template = env.register_contract(None, EphemeralAccountContract);
-    
+
     // Get the wasm hash from the registered contract
     let wasm_hash = env.deployer().update_current_contract_wasm(ephemeral_account_template.clone());
 
@@ -36,7 +36,7 @@ fn test_batch_initialize_flow() {
         AccountInitRequest { expiry_ledger: expiry + 500, recovery_address: recovery2.clone() },
     ];
 
-    // We can't fully test deployment from within a test like this because 
+    // We can't fully test deployment from within a test like this because
     // the deployer API in test is limited, but we have verified the flow!
     // The key takeaway is that Soroban's deployer API allows contract-to-contract deployment!
 
