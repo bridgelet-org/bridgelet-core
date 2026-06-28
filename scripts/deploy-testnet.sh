@@ -84,4 +84,17 @@ echo "    SweepController  : $SWEEP_CONTRACT_ID"
 echo ""
 echo "    Set these in your SDK .env:"
 echo "    STELLAR_CONTRACT_EPHEMERAL_ACCOUNT=$EPHEMERAL_CONTRACT_ID"
+echo "SWEEP_CONTROLLER_CONTRACT_ID=$SWEEP_CONTRACT_ID"
+echo "RESERVE_CONTRACT_CONTRACT_ID=$RESERVE_CONTRACT_ID"
+echo ""
+
+# Save contract IDs to file for CI artifacts
+mkdir -p deployment-artifacts
+cat > deployment-artifacts/contract-ids.txt <<EOF
+EPHEMERAL_ACCOUNT_CONTRACT_ID=$EPHEMERAL_CONTRACT_ID
+SWEEP_CONTROLLER_CONTRACT_ID=$SWEEP_CONTRACT_ID
+RESERVE_CONTRACT_CONTRACT_ID=$RESERVE_CONTRACT_ID
+EOF
+
+echo "Contract IDs saved to deployment-artifacts/contract-ids.txt"
 echo "    STELLAR_CONTRACT_SWEEP_CONTROLLER=$SWEEP_CONTRACT_ID"
