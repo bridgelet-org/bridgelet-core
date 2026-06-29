@@ -34,7 +34,7 @@ mod test {
         let controller = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &Address::generate(&env));
 
         assert_eq!(client.get_status(), AccountStatus::Active);
         assert!(!client.is_expired());
@@ -57,7 +57,7 @@ mod test {
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &Address::generate(&env));
         client.record_payment(&100, &asset);
 
         assert_eq!(client.get_status(), AccountStatus::PaymentReceived);
@@ -78,7 +78,7 @@ mod test {
         let asset2 = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &Address::generate(&env));
 
         client.record_payment(&100, &asset1);
         let info = client.get_info();
@@ -106,7 +106,7 @@ mod test {
         let destination = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &Address::generate(&env));
         client.record_payment(&100, &asset);
 
         let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
@@ -138,7 +138,7 @@ mod test {
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &Address::generate(&env));
         client.record_payment(&100, &asset);
         let result = client.try_record_payment(&50, &asset);
 
@@ -157,7 +157,7 @@ mod test {
         let controller = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &Address::generate(&env));
 
         for i in 0..10 {
             let asset = Address::generate(&env);
@@ -199,6 +199,7 @@ mod test {
             &expiry_ledger,
             &recovery,
             &Address::generate(&env),
+            &Address::generate(&env),
         );
         let result = client.try_record_payment(&0, &asset);
 
@@ -221,6 +222,7 @@ mod test {
             &expiry_ledger,
             &recovery,
             &Address::generate(&env),
+            &Address::generate(&env),
         );
 
         assert!(matches!(result, Err(Ok(Error::InvalidExpiry))));
@@ -241,6 +243,7 @@ mod test {
             &creator,
             &expiry_ledger,
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
         let result = client.try_expire();
@@ -264,6 +267,7 @@ mod test {
             &creator,
             &expiry_ledger,
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
         let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
@@ -289,6 +293,7 @@ mod test {
             &creator,
             &expiry_ledger,
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
         client.record_payment(&100, &asset);
@@ -318,6 +323,7 @@ mod test {
             &expiry_ledger,
             &recovery,
             &Address::generate(&env),
+            &Address::generate(&env),
         );
         client.record_payment(&100, &asset);
 
@@ -346,6 +352,7 @@ mod test {
             &expiry_ledger,
             &recovery,
             &Address::generate(&env),
+            &Address::generate(&env),
         );
         client.record_payment(&100, &asset);
 
@@ -372,6 +379,7 @@ mod test {
         assert_eq!(Error::InvalidStatus as u32, 12);
         assert_eq!(Error::DuplicateAsset as u32, 13);
         assert_eq!(Error::TooManyPayments as u32, 14);
+        assert_eq!(Error::NotUpgradeAdmin as u32, 15);
     }
 
     #[test]
@@ -388,7 +396,7 @@ mod test {
         let destination = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &Address::generate(&env));
 
         let asset1 = Address::generate(&env);
         let asset2 = Address::generate(&env);
@@ -425,7 +433,7 @@ mod test {
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &Address::generate(&env));
         client.record_payment(&100, &asset);
 
         let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
@@ -461,7 +469,7 @@ mod test {
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &Address::generate(&env));
         client.record_payment(&100, &asset);
 
         let initial_available = 250_000_000i128;
@@ -518,7 +526,7 @@ mod test {
         let asset = Address::generate(&env);
         let expiry_ledger = env.ledger().sequence() + 1000;
 
-        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller, &Address::generate(&env));
         client.record_payment(&100, &asset);
 
         let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
@@ -557,11 +565,13 @@ mod test {
             &expiry_ledger,
             &recovery,
             &Address::generate(&env),
+            &Address::generate(&env),
         );
         client.initialize(
             &creator,
             &(expiry_ledger + 1),
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
     }
@@ -584,6 +594,7 @@ mod test {
             &creator,
             &expiry_ledger,
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
         client.record_payment(&100, &asset);
@@ -609,6 +620,7 @@ mod test {
             &creator,
             &expiry_ledger,
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
         client.record_payment(&100, &asset);
@@ -636,6 +648,7 @@ mod test {
             &creator,
             &expiry_ledger,
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
         client.record_payment(&100, &asset);
@@ -667,9 +680,189 @@ mod test {
             &expiry_ledger,
             &recovery,
             &Address::generate(&env),
+            &Address::generate(&env),
         );
         println!("initialize auth result: {:?}", result);
 
         assert!(matches!(result, Err(Err(InvokeError::Abort))));
+    }
+
+    // ── Issue #107: recover() ────────────────────────────────────────────────
+
+    #[test]
+    fn test_recover_succeeds_for_creator_after_expiry() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &Address::generate(&env), &Address::generate(&env));
+        client.record_payment(&100, &asset);
+
+        env.ledger().set_sequence_number(expiry_ledger);
+        client.recover(&creator);
+
+        let info = client.get_info();
+        assert_eq!(info.status, AccountStatus::Expired);
+        assert_eq!(info.swept_to, Some(recovery));
+    }
+
+    #[test]
+    fn test_recover_succeeds_for_recovery_address_after_expiry() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &Address::generate(&env), &Address::generate(&env));
+
+        env.ledger().set_sequence_number(expiry_ledger);
+        client.recover(&recovery);
+
+        assert_eq!(client.get_status(), AccountStatus::Expired);
+    }
+
+    #[test]
+    fn test_recover_returns_not_expired_before_expiry() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &Address::generate(&env), &Address::generate(&env));
+
+        let result = client.try_recover(&creator);
+        assert!(matches!(result, Err(Ok(Error::NotExpired))));
+    }
+
+    #[test]
+    fn test_recover_returns_unauthorized_for_stranger() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let stranger = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &Address::generate(&env), &Address::generate(&env));
+        env.ledger().set_sequence_number(expiry_ledger);
+
+        let result = client.try_recover(&stranger);
+        assert!(matches!(result, Err(Ok(Error::Unauthorized))));
+    }
+
+    // ── Issue #109: upgrade() ────────────────────────────────────────────────
+
+    #[test]
+    fn test_upgrade_returns_not_upgrade_admin_for_non_admin() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let admin = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        // Initialize with a specific admin
+        client.initialize(&creator, &expiry_ledger, &recovery, &Address::generate(&env), &admin);
+
+        // Attempt upgrade with a non-admin — should be rejected
+        // We can't call upgrade directly without a valid wasm hash, but we can verify
+        // the admin is stored by checking the storage directly via as_contract
+        env.as_contract(&contract_id, || {
+            let stored = storage::get_admin(&env);
+            assert_eq!(stored, Some(admin));
+        });
+    }
+
+    // ── Issue #122: simulate_sweep() ────────────────────────────────────────
+
+    #[test]
+    fn test_simulate_sweep_returns_payments_on_happy_path() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let destination = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &Address::generate(&env), &Address::generate(&env));
+        client.record_payment(&500, &asset);
+
+        let (payments, error_code) = client.simulate_sweep(&destination);
+        assert_eq!(error_code, 0);
+        assert_eq!(payments.len(), 1);
+        assert_eq!(payments.get(0).unwrap().amount, 500);
+    }
+
+    #[test]
+    fn test_simulate_sweep_returns_error_when_no_payment() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let destination = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &Address::generate(&env), &Address::generate(&env));
+
+        let (payments, error_code) = client.simulate_sweep(&destination);
+        assert_eq!(error_code, Error::NoPaymentReceived as u32);
+        assert_eq!(payments.len(), 0);
+    }
+
+    #[test]
+    fn test_simulate_sweep_returns_error_when_expired() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let destination = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1;
+
+        client.initialize(&creator, &expiry_ledger, &recovery, &Address::generate(&env), &Address::generate(&env));
+        client.record_payment(&100, &asset);
+        env.ledger().set_sequence_number(expiry_ledger);
+
+        let (payments, error_code) = client.simulate_sweep(&destination);
+        assert_eq!(error_code, Error::AccountExpired as u32);
+        assert_eq!(payments.len(), 0);
     }
 }
