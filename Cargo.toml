@@ -6,6 +6,7 @@ members = [
     "contracts/shared",
     "contracts/reserve_contract",
     "contracts/account_factory",
+    "tools/event_backfill",
 ]
 
 [profile.release]
