@@ -149,13 +149,15 @@ Sets the authorized signer for the controller.
 
 ```rust
 fn initialize(
-    env: Env, 
+    env: Env,
+    creator: Address,
     authorized_signer: BytesN<32>
 ) -> Result<(), Error>
 ```
 
 | Parameter | Type | Description |
 | :--- | :--- | :--- |
+| `creator` | `Address` | Address allowed to manage controller configuration. |
 | `authorized_signer` | `BytesN<32>` | Ed25519 public key for verifying sweep signatures. |
 
 #### `execute_sweep`
@@ -167,6 +169,19 @@ fn execute_sweep(
     ephemeral_account: Address,
     destination: Address,
     auth_signature: BytesN<64>
+) -> Result<(), Error>
+```
+
+#### `claim`
+Experimental gas-free claim flow. The recipient authorizes the invocation via
+Soroban auth entries, and a relayer/SDK can submit the transaction and pay the
+fees.
+
+```rust
+fn claim(
+    env: Env,
+    recipient: Address,
+    ephemeral_account: Address
 ) -> Result<(), Error>
 ```
 
