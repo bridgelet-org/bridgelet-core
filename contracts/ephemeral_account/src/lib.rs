@@ -26,9 +26,15 @@ impl EphemeralAccountContract {
     /// Initialize the ephemeral account with restrictions
     ///
     /// # Arguments
-    /// * `creator` - Address that created this account
+    /// * `creator` - Address that created this account (must authorize the call)
     /// * `expiry_ledger` - Ledger number when account expires
-    /// * `recovery_address` - Address to return funds if expired
+    /// * `recovery_address` - Address to return funds if expired (can be different from creator)
+    /// * `authorized_controller` - Address authorized to call sweep() on this account
+    ///
+    /// # Important Notes
+    /// - The `creator` and `recovery_address` are stored independently and can be different accounts
+    /// - The `recovery_address` can trigger recovery via `expire()` without being the creator
+    /// - Only the `creator` must authorize the initialization call
     ///
     /// # Errors
     /// Returns Error::AlreadyInitialized if called more than once

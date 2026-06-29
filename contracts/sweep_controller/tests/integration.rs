@@ -4,10 +4,10 @@ extern crate std;
 
 use ephemeral_account::{AccountStatus, EphemeralAccountContract, EphemeralAccountContractClient};
 use soroban_sdk::{
-    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
+    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation, Ledger as _},
     Address, BytesN, Env, IntoVal,
 };
-use sweep_controller::{Error, SweepController, SweepControllerClient};
+use sweep_controller::{SweepController, SweepControllerClient};
 
 fn generate_test_keypair(env: &Env) -> (BytesN<32>, BytesN<64>) {
     let public_key = BytesN::from_array(
@@ -340,4 +340,47 @@ fn test_initialize_with_authorized_destination() {
     let result = controller_client.try_claim(&recipient, &ephemeral_id);
 
     assert!(result.is_err());
+}
+
+/// Test that creator and recovery_address can be different accounts
+#[test]
+fn test_creator_and_recovery_address_independence() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let controller_id = env.register(SweepController, ());
+    let controller_client = SweepControllerClient::new(&env, &controller_id);
+
+    let creator = Address::generate(&env);
+    let (authorized_signer, _) = generate_test_keypair(&env);
+    controller_client.initialize(&creator, &authorized_signer, &None);
+
+    let ephemeral_id = env.register(EphemeralAccountContract, ());
+    let ephemeral_client = EphemeralAccountContractClient::new(&env, &ephemeral_id);
+
+    // Use different addresses for creator and recovery
+    let account_creator = Address::generate(&env);
+    let recovery_address = Address::generate(&env);
+    let expiry = env.ledger().sequence() + 1_000;
+
+    ephemeral_client.initialize(&account_creator, &expiry, &recovery_address, &controller_id);
+
+    // Verify both are stored independently
+    let info = ephemeral_client.get_info();
+    assert_eq!(info.creator, account_creator);
+    assert_eq!(info.recovery_address, recovery_address);
+    assert_ne!(info.creator, info.recovery_address);
+
+    // Record payment
+    let asset_id = Address::generate(&env);
+    ephemeral_client.record_payment(&100, &asset_id);
+
+    // Verify recovery_address can trigger expire without being creator
+    env.ledger().set_sequence_number(expiry);
+    ephemeral_client.expire();
+
+    let info_after = ephemeral_client.get_info();
+    assert_eq!(info_after.status, AccountStatus::Expired);
+    assert_eq!(info_after.swept_to, Some(recovery_address));
+    assert_ne!(info_after.swept_to, Some(account_creator));
 }

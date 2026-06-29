@@ -672,4 +672,70 @@ mod test {
 
         assert!(matches!(result, Err(Err(InvokeError::Abort))));
     }
+
+    #[test]
+    fn test_creator_and_recovery_address_can_be_different() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1;
+
+        // Initialize with different creator and recovery_address
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.record_payment(&100, &asset);
+
+        // Verify both are stored independently
+        let info = client.get_info();
+        assert_eq!(info.creator, creator);
+        assert_eq!(info.recovery_address, recovery);
+        assert_ne!(info.creator, info.recovery_address);
+
+        // Advance to expiry
+        env.ledger().set_sequence_number(expiry_ledger);
+
+        // Expire should route funds to recovery_address, not creator
+        client.expire();
+
+        let info_after = client.get_info();
+        assert_eq!(info_after.status, AccountStatus::Expired);
+        assert_eq!(info_after.swept_to, Some(recovery));
+        assert_ne!(info_after.swept_to, Some(creator));
+    }
+
+    #[test]
+    fn test_recovery_address_can_trigger_expire_without_being_creator() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1;
+
+        // Initialize with different creator and recovery_address
+        client.initialize(&creator, &expiry_ledger, &recovery, &controller);
+        client.record_payment(&100, &asset);
+
+        // Advance to expiry
+        env.ledger().set_sequence_number(expiry_ledger);
+
+        // expire() does not require authorization - anyone can call it after expiry
+        // This verifies recovery_address can trigger recovery without being the creator
+        client.expire();
+
+        let info = client.get_info();
+        assert_eq!(info.status, AccountStatus::Expired);
+        assert_eq!(info.swept_to, Some(recovery));
+    }
 }

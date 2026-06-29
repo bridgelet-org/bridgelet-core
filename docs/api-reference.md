@@ -20,9 +20,10 @@ fn initialize(
 
 | Parameter | Type | Description |
 | :--- | :--- | :--- |
-| `creator` | `Address` | The account that created this contract. |
+| `creator` | `Address` | The account that created this contract. Must authorize the initialization. |
 | `expiry_ledger` | `u32` | The ledger sequence number at which the account expires. |
-| `recovery_address` | `Address` | Where funds are sent if the account expires. |
+| `recovery_address` | `Address` | Where funds are sent if the account expires. Can be different from the creator. |
+| `authorized_controller` | `Address` | The address authorized to call sweep() on this account. |
 
 #### `record_payment`
 Records an inbound payment. Supports multiple payments of different assets.
