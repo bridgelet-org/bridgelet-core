@@ -38,6 +38,7 @@ impl EphemeralAccountContract {
         expiry_ledger: u32,
         recovery_address: Address,
         authorized_controller: Address,
+        admin: Address,
     ) -> Result<(), Error> {
         // Check if already initialized
         if storage::is_initialized(&env) {
@@ -60,6 +61,7 @@ impl EphemeralAccountContract {
         storage::set_recovery_address(&env, &recovery_address);
         storage::set_status(&env, AccountStatus::Active);
         storage::set_authorized_controller(&env, &authorized_controller);
+        storage::set_admin(&env, &admin);
         storage::init_reserve_tracking(&env, BASE_RESERVE_STROOPS);
 
         // Emit event
@@ -350,6 +352,111 @@ impl EphemeralAccountContract {
             },
             swept_to: storage::get_swept_to(&env),
         })
+    }
+
+    /// Recover funds for an expired account.
+    /// Only callable by the original creator or recovery_address after expiry.
+    ///
+    /// # Errors
+    /// Returns Error::NotExpired if the account has not expired yet
+    /// Returns Error::Unauthorized if caller is neither creator nor recovery_address
+    /// Returns Error::InvalidStatus if already swept or recovered
+    pub fn recover(env: Env, caller: Address) -> Result<(), Error> {
+        if !storage::is_initialized(&env) {
+            return Err(Error::NotInitialized);
+        }
+
+        let status = storage::get_status(&env);
+        if status == AccountStatus::Swept || status == AccountStatus::Expired {
+            return Err(Error::InvalidStatus);
+        }
+
+        if !Self::is_expired(env.clone()) {
+            return Err(Error::NotExpired);
+        }
+
+        let creator = storage::get_creator(&env);
+        let recovery_address = storage::get_recovery_address(&env);
+
+        if caller != creator && caller != recovery_address {
+            return Err(Error::Unauthorized);
+        }
+        caller.require_auth();
+
+        storage::set_status(&env, AccountStatus::Expired);
+        storage::set_swept_to(&env, &recovery_address);
+
+        let total_amount = if storage::has_payment_received(&env) {
+            let payments = storage::get_all_payments(&env);
+            let mut total = 0i128;
+            for (_, payment) in payments.iter() {
+                total = total
+                    .checked_add(payment.amount)
+                    .ok_or(Error::InvalidAmount)?;
+            }
+            total
+        } else {
+            0
+        };
+
+        let sweep_id = env.ledger().sequence() as u64;
+        storage::set_last_sweep_id(&env, sweep_id);
+
+        let reclaimed_reserve = Self::reclaim_reserve_to(&env, &recovery_address, sweep_id)?;
+        events::emit_account_expired(&env, recovery_address, total_amount, reclaimed_reserve);
+
+        Ok(())
+    }
+
+    /// Upgrade the contract WASM. Restricted to the admin set at deploy time.
+    ///
+    /// # Arguments
+    /// * `new_wasm_hash` - Hash of the new WASM blob already uploaded to the ledger
+    ///
+    /// # Errors
+    /// Returns Error::NotUpgradeAdmin if caller is not the stored admin
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+        if !storage::is_initialized(&env) {
+            return Err(Error::NotInitialized);
+        }
+
+        let admin = storage::get_admin(&env).ok_or(Error::NotUpgradeAdmin)?;
+        admin.require_auth();
+
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Ok(())
+    }
+
+    /// Dry-run sweep simulation: returns the payments that would be swept and
+    /// any error that would prevent a real sweep, without executing on-chain.
+    ///
+    /// Returns `(payments, error_code)` where `error_code` is 0 on success.
+    pub fn simulate_sweep(env: Env, destination: Address) -> (Vec<Payment>, u32) {
+        if !storage::is_initialized(&env) {
+            return (Vec::new(&env), Error::NotInitialized as u32);
+        }
+
+        if storage::get_status(&env) == AccountStatus::Swept {
+            return (Vec::new(&env), Error::AlreadySwept as u32);
+        }
+
+        if !storage::has_payment_received(&env) {
+            return (Vec::new(&env), Error::NoPaymentReceived as u32);
+        }
+
+        if Self::is_expired(env.clone()) {
+            return (Vec::new(&env), Error::AccountExpired as u32);
+        }
+
+        let _ = destination; // destination accepted for future fee simulation
+
+        let payments = storage::get_all_payments(&env);
+        let mut payments_vec = Vec::new(&env);
+        for payment in payments.values() {
+            payments_vec.push_back(payment);
+        }
+
+        (payments_vec, 0)
     }
 
     // Private helper functions
