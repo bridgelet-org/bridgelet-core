@@ -2,6 +2,7 @@ name: Deploy to Testnet
 
 on:
   push:
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       reason:
@@ -80,27 +81,27 @@ jobs:
         cd ../reserve_contract
         cargo build --target wasm32-unknown-unknown --release
     
-    - name: Deploy to Stellar Testnet
-      env:
-        DEPLOYER_SECRET_KEY: ${{ secrets.TESTNET_DEPLOYER_SECRET_KEY }}
-      run: |
-        chmod +x scripts/deploy-testnet.sh
-        ./scripts/deploy-testnet.sh
+    # - name: Deploy to Stellar Testnet
+    #   env:
+    #     DEPLOYER_SECRET_KEY: ${{ secrets.TESTNET_DEPLOYER_SECRET_KEY }}
+    #   run: |
+    #     chmod +x scripts/deploy-testnet.sh
+    #     ./scripts/deploy-testnet.sh
     
-    - name: Upload contract IDs as artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: contract-ids
-        path: deployment-artifacts/contract-ids.txt
-        retention-days: 90
+    # - name: Upload contract IDs as artifacts
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: contract-ids
+    #     path: deployment-artifacts/contract-ids.txt
+    #     retention-days: 90
     
-    - name: Post deployment summary
-      run: |
-        echo "## 🚀 Testnet Deployment Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "Contracts have been successfully deployed to Stellar Testnet!" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Contract IDs" >> $GITHUB_STEP_SUMMARY
-        echo '```' >> $GITHUB_STEP_SUMMARY
-        cat deployment-artifacts/contract-ids.txt >> $GITHUB_STEP_SUMMARY
-        echo '```' >> $GITHUB_STEP_SUMMARY
+    # - name: Post deployment summary
+    #   run: |
+    #     echo "## 🚀 Testnet Deployment Summary" >> $GITHUB_STEP_SUMMARY
+    #     echo "" >> $GITHUB_STEP_SUMMARY
+    #     echo "Contracts have been successfully deployed to Stellar Testnet!" >> $GITHUB_STEP_SUMMARY
+    #     echo "" >> $GITHUB_STEP_SUMMARY
+    #     echo "### Contract IDs" >> $GITHUB_STEP_SUMMARY
+    #     echo '```' >> $GITHUB_STEP_SUMMARY
+    #     cat deployment-artifacts/contract-ids.txt >> $GITHUB_STEP_SUMMARY
+    #     echo '```' >> $GITHUB_STEP_SUMMARY
