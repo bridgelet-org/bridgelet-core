@@ -1,0 +1,10 @@
+{
+  "network": "testnet",
+  "deployedAt": null,
+  "contracts": {
+    "ephemeralAccount": null,
+    "sweepController": null
+  },
+  "note": "Run scripts/deploy-testnet.sh to populate this file"
+}
+

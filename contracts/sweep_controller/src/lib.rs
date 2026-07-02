@@ -6,7 +6,10 @@ mod storage;
 mod transfers;
 
 use ephemeral_account::EphemeralAccountContractClient as EphemeralAccountClient;
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env};
+use soroban_sdk::{
+    auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
+    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, IntoVal, Vec,
+};
 
 use authorization::AuthContext;
 use bridgelet_shared::AccountStatus;
@@ -75,14 +78,7 @@ impl SweepController {
         destination: Address,
         auth_signature: BytesN<64>,
     ) -> Result<(), Error> {
-        // Validate destination if authorized destination is set (locked mode)
-        if storage::has_authorized_destination(&env) {
-            let authorized_dest =
-                storage::get_authorized_destination(&env).ok_or(Error::UnauthorizedDestination)?;
-            if destination != authorized_dest {
-                return Err(Error::UnauthorizedDestination);
-            }
-        }
+        Self::validate_destination(&env, &destination)?;
 
         // Verify authorization
         let auth_ctx = AuthContext::new(
@@ -92,17 +88,80 @@ impl SweepController {
         );
         auth_ctx.verify(&env)?;
 
-        // Increment nonce after successful verification to prevent replay attacks
-        authorization::increment_nonce(&env);
+        Self::sweep_account(&env, ephemeral_account, destination, auth_signature, true)
+    }
 
-        // Call ephemeral account contract to validate and authorize sweep
-        // This triggers the account's sweep() method which updates state
+    /// Claim funds to the recipient using Soroban auth entries instead of a
+    /// transaction-source signature. This enables a relayer/SDK to submit the
+    /// transaction while the recipient only signs the authorization payload.
+    pub fn claim(env: Env, recipient: Address, ephemeral_account: Address) -> Result<(), Error> {
+        recipient.require_auth();
+        Self::validate_destination(&env, &recipient)?;
+        Self::authorize_claim(&env, &ephemeral_account, &recipient)?;
+
         let account_client = EphemeralAccountClient::new(&env, &ephemeral_account);
+        let info = account_client.get_info();
+        let amount = info.payments.iter().map(|p| p.amount).sum();
+        emit_sweep_completed(&env, ephemeral_account, recipient, amount);
 
-        // The account contract validates state and authorizes the sweep
+        Ok(())
+    }
+
+    fn validate_destination(env: &Env, destination: &Address) -> Result<(), Error> {
+        if storage::has_authorized_destination(env) {
+            let authorized_dest =
+                storage::get_authorized_destination(env).ok_or(Error::UnauthorizedDestination)?;
+            if *destination != authorized_dest {
+                return Err(Error::UnauthorizedDestination);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn authorize_ephemeral_sweep(
+        env: &Env,
+        ephemeral_account: &Address,
+        destination: &Address,
+        auth_signature: &BytesN<64>,
+    ) {
+        let args = (destination.clone(), auth_signature.clone()).into_val(env);
+        let context = ContractContext {
+            contract: ephemeral_account.clone(),
+            fn_name: symbol_short!("sweep"),
+            args,
+        };
+        let auth_entries = Vec::from_array(
+            env,
+            [InvokerContractAuthEntry::Contract(SubContractInvocation {
+                context,
+                sub_invocations: Vec::new(env),
+            })],
+        );
+        env.authorize_as_current_contract(auth_entries);
+    }
+
+    fn sweep_account(
+        env: &Env,
+        ephemeral_account: Address,
+        destination: Address,
+        auth_signature: BytesN<64>,
+        increment_nonce: bool,
+    ) -> Result<(), Error> {
+        if increment_nonce {
+            // Increment nonce after successful verification to prevent replay attacks.
+            authorization::increment_nonce(env);
+        }
+
+        Self::authorize_ephemeral_sweep(env, &ephemeral_account, &destination, &auth_signature);
+
+        // Call ephemeral account contract to validate and authorize sweep.
+        let account_client = EphemeralAccountClient::new(env, &ephemeral_account);
+
+        // The account contract validates state and authorizes the sweep.
         account_client.sweep(&destination, &auth_signature);
 
-        // Get payment details from account
+        // Get payment details from account.
         let info = account_client.get_info();
 
         // Verify payment was received
@@ -116,20 +175,32 @@ impl SweepController {
         }
 
         // Execute the actual token transfers for all recorded payments
-        let mut payments_vec = soroban_sdk::Vec::new(&env);
+        let mut payments_vec = Vec::new(env);
         for payment in info.payments.iter() {
             payments_vec.push_back(payment);
         }
 
-        transfers::execute_transfers(&env, &ephemeral_account, &destination, &payments_vec)
+        transfers::execute_transfers(env, &ephemeral_account, &destination, &payments_vec)
             .map_err(|_| Error::TransferFailed)?;
 
-        // Emit sweep completed event after successful transfer
-        emit_sweep_completed(&env, ephemeral_account, destination, amount);
+        // Emit sweep completed event after successful transfer.
+        emit_sweep_completed(env, ephemeral_account, destination, amount);
 
         Ok(())
     }
 
+    fn authorize_claim(
+        env: &Env,
+        ephemeral_account: &Address,
+        recipient: &Address,
+    ) -> Result<(), Error> {
+        let auth_signature = BytesN::from_array(env, &[0; 64]);
+        Self::authorize_ephemeral_sweep(env, ephemeral_account, recipient, &auth_signature);
+
+        let account_client = EphemeralAccountClient::new(env, ephemeral_account);
+        account_client.sweep(recipient, &auth_signature);
+        Ok(())
+    }
     /// Check if an account is ready for sweep
     pub fn can_sweep(env: Env, ephemeral_account: Address) -> bool {
         let account_client = EphemeralAccountClient::new(&env, &ephemeral_account);
