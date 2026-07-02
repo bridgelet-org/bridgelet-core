@@ -61,11 +61,24 @@ fn setup_ready_account(
             invoke: &soroban_sdk::testutils::MockAuthInvoke {
                 contract: &ephemeral_id,
                 fn_name: "initialize",
-                args: (&account_creator, &expiry, &recovery, &controller_id).into_val(env),
+                args: (
+                    &account_creator,
+                    &expiry,
+                    &recovery,
+                    &controller_id,
+                    &account_creator,
+                )
+                    .into_val(env),
                 sub_invokes: &[],
             },
         }])
-        .initialize(&account_creator, &expiry, &recovery, &controller_id);
+        .initialize(
+            &account_creator,
+            &expiry,
+            &recovery,
+            &controller_id,
+            &account_creator,
+        );
 
     let asset_id = Address::generate(&env);
     env.mock_all_auths_allowing_non_root_auth();
@@ -125,7 +138,7 @@ fn test_execute_sweep_with_valid_signature() {
     let expiry = env.ledger().sequence() + 1000;
 
     // Initialize ephemeral account, authorizing this SweepController to call sweep()
-    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &creator);
 
     // Create an invalid signature (all zeros - different from valid signature)
     let invalid_sig = BytesN::from_array(&env, &[0u8; 64]);
@@ -158,7 +171,13 @@ fn test_sweep_without_payment() {
     let account_creator = Address::generate(&env);
     let recovery = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1_000;
-    ephemeral_client.initialize(&account_creator, &expiry, &recovery, &controller_id);
+    ephemeral_client.initialize(
+        &account_creator,
+        &expiry,
+        &recovery,
+        &controller_id,
+        &account_creator,
+    );
 
     let asset_id = Address::generate(&env);
     ephemeral_client.record_payment(&100, &asset_id);
@@ -272,7 +291,7 @@ fn test_unauthorized_signer_not_set() {
     let expiry = env.ledger().sequence() + 1000;
 
     // Initialize ephemeral account, authorizing this SweepController to call sweep()
-    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &creator);
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -326,11 +345,24 @@ fn test_initialize_with_authorized_destination() {
             invoke: &soroban_sdk::testutils::MockAuthInvoke {
                 contract: &ephemeral_id,
                 fn_name: "initialize",
-                args: (&account_creator, &expiry, &recovery, &controller_id).into_val(&env),
+                args: (
+                    &account_creator,
+                    &expiry,
+                    &recovery,
+                    &controller_id,
+                    &account_creator,
+                )
+                    .into_val(&env),
                 sub_invokes: &[],
             },
         }])
-        .initialize(&account_creator, &expiry, &recovery, &controller_id);
+        .initialize(
+            &account_creator,
+            &expiry,
+            &recovery,
+            &controller_id,
+            &account_creator,
+        );
 
     let asset_id = Address::generate(&env);
     env.mock_all_auths_allowing_non_root_auth();

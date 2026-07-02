@@ -61,6 +61,7 @@ impl AccountFactory {
                 &request.expiry_ledger,
                 &request.recovery_address,
                 &creator,
+                &creator,
             ) {
                 Ok(_) => AccountInitResult {
                     account_address: account_address.clone(),
