@@ -97,11 +97,13 @@ impl SweepController {
     pub fn claim(env: Env, recipient: Address, ephemeral_account: Address) -> Result<(), Error> {
         recipient.require_auth();
         Self::validate_destination(&env, &recipient)?;
-        Self::authorize_claim(&env, &ephemeral_account, &recipient)?;
 
+        // Read payment info before sweep_claim() changes the account state
         let account_client = EphemeralAccountClient::new(&env, &ephemeral_account);
         let info = account_client.get_info();
-        let amount = info.payments.iter().map(|p| p.amount).sum();
+        let amount: i128 = info.payments.iter().map(|p| p.amount).sum();
+
+        Self::authorize_claim(&env, &ephemeral_account, &recipient)?;
         emit_sweep_completed(&env, ephemeral_account, recipient, amount);
 
         Ok(())
@@ -189,16 +191,30 @@ impl SweepController {
         Ok(())
     }
 
+    // Replace the entire authorize_claim function:
     fn authorize_claim(
         env: &Env,
         ephemeral_account: &Address,
         recipient: &Address,
     ) -> Result<(), Error> {
-        let auth_signature = BytesN::from_array(env, &[0; 64]);
-        Self::authorize_ephemeral_sweep(env, ephemeral_account, recipient, &auth_signature);
+        // Authorize the controller as the invoker of sweep_claim on the ephemeral account
+        let args = (recipient.clone(),).into_val(env);
+        let context = ContractContext {
+            contract: ephemeral_account.clone(),
+            fn_name: symbol_short!("swp_claim"), // symbol_short! max 9 chars — abbreviated
+            args,
+        };
+        let auth_entries = Vec::from_array(
+            env,
+            [InvokerContractAuthEntry::Contract(SubContractInvocation {
+                context,
+                sub_invocations: Vec::new(env),
+            })],
+        );
+        env.authorize_as_current_contract(auth_entries);
 
         let account_client = EphemeralAccountClient::new(env, ephemeral_account);
-        account_client.sweep(recipient, &auth_signature);
+        account_client.sweep_claim(recipient);
         Ok(())
     }
     /// Check if an account is ready for sweep
