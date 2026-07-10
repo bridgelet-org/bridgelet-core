@@ -20,6 +20,14 @@ echo "Building reserve_contract..."
 cd contracts/reserve_contract
 cargo build --target wasm32-unknown-unknown --release
 cd ../..
+ 
+# Build account_factory contract
+# NOTE: this contract was previously missing from this script entirely —
+# it is a workspace member (see root Cargo.toml) but was never built here.
+echo "Building account_factory..."
+cd contracts/account_factory
+cargo build --target wasm32-unknown-unknown --release
+cd ../..
 
 echo "✅ Build complete!"
 echo "Contracts location: contracts/*/target/wasm32-unknown-unknown/release/"

@@ -3,7 +3,9 @@
   "deployedAt": null,
   "contracts": {
     "ephemeralAccount": null,
-    "sweepController": null
+    "sweepController": null,
+    "reserveContract": null,
+    "accountFactory": null
   },
   "note": "Run scripts/deploy-testnet.sh to populate this file"
 }
