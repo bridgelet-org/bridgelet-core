@@ -1,89 +1,103 @@
-# name: Test Contracts
+name: Test Contracts
 
-# on:
-#   push:
-#     branches: [ main, develop ]
-#   pull_request:
-#     branches: [ main ]
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
 
-# jobs:
-#   test:
-#     name: Test Contracts
-#     runs-on: ubuntu-latest
+jobs:
+  test:
+    name: Test Contracts
+    runs-on: ubuntu-latest
 
-#     steps:
-#     - uses: actions/checkout@v4
+    steps:
+    - uses: actions/checkout@v4
 
-#     - name: Install Rust
-#       uses: actions-rs/toolchain@v1
-#       with:
-#         toolchain: stable
-#         target: wasm32-unknown-unknown
-#         override: true
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: 1.88.0
+        target: wasm32-unknown-unknown
+        override: true
+        components: rustfmt, clippy
 
-#     - name: Install soroban-cli
-#       run: cargo install --locked soroban-cli --version 22.0.0
+    - name: Ensure rustfmt and clippy are installed
+      run: rustup component add rustfmt clippy
 
-#     - name: Cache cargo registry
-#       uses: actions/cache@v4
-#       with:
-#         path: ~/.cargo/registry
-#         key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+    - name: Install soroban-cli
+      run: cargo install --locked soroban-cli --version 22.0.0
 
-#     - name: Cache cargo index
-#       uses: actions/cache@v4
-#       with:
-#         path: ~/.cargo/git
-#         key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
-#     - name: Cache target directory
-#       uses: actions/cache@v4
-#       with:
-#         path: target
-#         key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
 
-#     - name: Run tests
-#       run: |
-#         cd contracts/ephemeral_account
-#         cargo test --verbose
-#         cd ../sweep_controller
-#         cargo test --verbose
-#         cd ../reserve_contract
-#         cargo test --verbose
+    - name: Cache target directory
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
 
-#     - name: Check format
-#       run: |
-#         cd contracts/ephemeral_account
-#         cargo fmt -- --check
-#         cd ../sweep_controller
-#         cargo fmt -- --check
-#         cd ../reserve_contract
-#         cargo fmt -- --check
+    - name: Run tests
+      run: |
+        cd contracts/ephemeral_account
+        cargo test --verbose
+        cd ../sweep_controller
+        cargo test --verbose
+        cargo test --verbose --test integration
+        cd ../reserve_contract
+        cargo test --verbose
+        cd ../account_factory
+        cargo test --verbose
 
-#     - name: Run clippy
-#       run: |
-#         cd contracts/ephemeral_account
-#         cargo clippy -- -D warnings
-#         cd ../sweep_controller
-#         cargo clippy -- -D warnings
-#         cd ../reserve_contract
-#         cargo clippy -- -D warnings
+    - name: Check format
+      run: |
+        cd contracts/ephemeral_account
+        cargo fmt -- --check
+        cd ../sweep_controller
+        cargo fmt -- --check
+        cd ../reserve_contract
+        cargo fmt -- --check
+        cd ../account_factory
+        cargo fmt -- --check
 
-#     - name: Build all contracts
-#       run: |
-#         cd contracts/ephemeral_account
-#         cargo build --target wasm32-unknown-unknown --release
-#         cd ../sweep_controller
-#         cargo build --target wasm32-unknown-unknown --release
-#         cd ../reserve_contract
-#         cargo build --target wasm32-unknown-unknown --release
+    - name: Run clippy
+      run: |
+        cd contracts/ephemeral_account
+        cargo clippy -- -D warnings
+        cd ../sweep_controller
+        cargo clippy -- -D warnings
+        cd ../reserve_contract
+        cargo clippy -- -D warnings
+        cd ../account_factory
+        cargo clippy -- -D warnings
 
-#     - name: Upload WASM artifacts
-#       uses: actions/upload-artifact@v4
-#       with:
-#         name: wasm-contracts
-#         path: |
-#           contracts/ephemeral_account/target/wasm32-unknown-unknown/release/*.wasm
-#           contracts/sweep_controller/target/wasm32-unknown-unknown/release/*.wasm
-#           contracts/reserve_contract/target/wasm32-unknown-unknown/release/*.wasm
-#         retention-days: 30
+    - name: Build all contracts
+      run: |
+        cd contracts/ephemeral_account
+        cargo build --target wasm32-unknown-unknown --release
+        cd ../sweep_controller
+        cargo build --target wasm32-unknown-unknown --release
+        cd ../reserve_contract
+        cargo build --target wasm32-unknown-unknown --release
+        cd ../account_factory
+        cargo build --target wasm32-unknown-unknown --release
+
+    - name: Upload WASM artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: wasm-contracts
+        path: |
+          contracts/ephemeral_account/target/wasm32-unknown-unknown/release/*.wasm
+          contracts/sweep_controller/target/wasm32-unknown-unknown/release/*.wasm
+          contracts/reserve_contract/target/wasm32-unknown-unknown/release/*.wasm
+          contracts/account_factory/target/wasm32-unknown-unknown/release/*.wasm
+        retention-days: 30
