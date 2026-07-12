@@ -1,12 +1,17 @@
 {
   "network": "testnet",
-  "deployedAt": null,
+  "deployedAt": "2026-07-12T10:29:25Z",
   "contracts": {
-    "ephemeralAccount": null,
-    "sweepController": null,
-    "reserveContract": null,
-    "accountFactory": null
+    "ephemeralAccount": "CB7Z22TXR6ZKG7MDXIGJL6QVQQ3L3DQOFR6JV325NZK4CTYWFPVZBBP3",
+    "sweepController": "CBEU4X5MNGOECBSTNEUFMBALH2YI5YV4UIH7YXRNOLR2DNLZQD4Z5KWE",
+    "reserveContract": "CACYMICFLHSPKVMCK336IEGCWAQB4XBC7P7HTJSQY3R7Y2YASE4AX3MS",
+    "accountFactory": "CARBMZY4466SWP3RTN3DR2F4JYNR5UCXD2ICFISV2YI4TS3AAZV2TQ24"
   },
-  "note": "Run scripts/deploy-testnet.sh to populate this file"
+  "config": {
+    "authorizedSigner": "16ac79d642e33ac696e822cc7175ad7ddd5587a9dd8b6942640cbb832a1ab4bf",
+    "creatorAddress": "GCKGORHRRXLVWDVPR565V6JTMYP43TGH4KH5X7REVW7AL4LMZZLF4PAA",
+    "reserveAdminAddress": "GCKGORHRRXLVWDVPR565V6JTMYP43TGH4KH5X7REVW7AL4LMZZLF4PAA",
+    "recoveryAddress": "GAEG3HJONLNMHB6L37YX5QHHBYWAKDQZ4GV7UPOWUPI6TOKICHG2PRE6",
+    "ephemeralAccountWasmHash": "5e667ea0687341bdccc81538492143b573777dd04b2450cdeb89b02cee62c58e"
+  }
 }
-

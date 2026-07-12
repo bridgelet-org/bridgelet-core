@@ -5,14 +5,20 @@ mod errors;
 mod storage;
 mod transfers;
 
-use ephemeral_account::EphemeralAccountContractClient as EphemeralAccountClient;
+mod ephemeral_account_contract {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32v1-none/release/ephemeral_account.wasm"
+    );
+}
+use ephemeral_account_contract::Client as EphemeralAccountClient;
+
 use soroban_sdk::{
     auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
     contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, IntoVal, Vec,
 };
 
 use authorization::AuthContext;
-use bridgelet_shared::AccountStatus;
+use bridgelet_shared::{AccountStatus, Payment};
 pub use errors::Error;
 
 #[contract]
@@ -176,10 +182,22 @@ impl SweepController {
             return Err(Error::AccountNotReady);
         }
 
-        // Execute the actual token transfers for all recorded payments
+        // Execute the actual token transfers for all recorded payments.
+        //
+        // info.payments yields ephemeral_account_contract::Payment (the
+        // contractimport!-generated type) — structurally identical to
+        // bridgelet_shared::Payment but a distinct Rust type, since
+        // contractimport! derives its own types from the wasm's interface
+        // metadata rather than reusing the shared crate. Convert explicitly
+        // field-by-field; transfers::execute_transfers expects the
+        // bridgelet_shared version.
         let mut payments_vec = Vec::new(env);
         for payment in info.payments.iter() {
-            payments_vec.push_back(payment);
+            payments_vec.push_back(Payment {
+                asset: payment.asset.clone(),
+                amount: payment.amount,
+                timestamp: payment.timestamp,
+            });
         }
 
         transfers::execute_transfers(env, &ephemeral_account, &destination, &payments_vec)
@@ -227,6 +245,18 @@ impl SweepController {
         info.payment_received
             && info.status as u32 == AccountStatus::PaymentReceived as u32
             && !account_client.is_expired()
+    }
+
+    /// Return the current sweep nonce for this controller.
+    ///
+    /// Off-chain signers must sign a `construct_sweep_message()` payload
+    /// built with THIS value, not a locally-tracked guess — the contract
+    /// always verifies against its own current on-chain nonce, so a stale
+    /// or mistracked nonce here produces a signature that will not verify.
+    /// Starts at 0 at `initialize()` and increments by 1 after every
+    /// successful `execute_sweep()`/`claim()` call.
+    pub fn get_nonce(env: Env) -> u64 {
+        storage::get_sweep_nonce(&env)
     }
 
     /// Update the authorized destination address
