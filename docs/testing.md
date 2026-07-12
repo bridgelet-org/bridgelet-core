@@ -303,7 +303,7 @@ fn test_expiration() {
 
 ```bash
 # Install Soroban CLI
-cargo install --locked soroban-cli --version 22.0.0
+cargo install --locked stellar-cli --version 23.4.1
 
 # Verify installation
 soroban --version

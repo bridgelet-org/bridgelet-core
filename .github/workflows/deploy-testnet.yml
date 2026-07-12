@@ -18,16 +18,19 @@ jobs:
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: 1.88.0
-        target: wasm32-unknown-unknown
+        toolchain: 1.89.0
+        target: wasm32v1-none
         override: true
         components: rustfmt, clippy
 
     - name: Ensure rustfmt and clippy are installed
       run: rustup component add rustfmt clippy
 
+    - name: Install stellar-cli
+      run: curl -fsSL https://github.com/stellar/stellar-cli/raw/main/install.sh | sh -s -- --install-deps
+
     - name: Install soroban-cli
-      run: cargo install --locked soroban-cli --version 22.0.0
+      run: cargo install --locked stellar-cli --version 23.4.1
 
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -46,6 +49,9 @@ jobs:
       with:
         path: target
         key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build all contracts
+      run: stellar contract build
 
     - name: Run tests
       run: |
@@ -80,17 +86,6 @@ jobs:
         cargo clippy -- -D warnings
         cd ../account_factory
         cargo clippy -- -D warnings
-
-    - name: Build all contracts
-      run: |
-        cd contracts/ephemeral_account
-        cargo build --target wasm32-unknown-unknown --release
-        cd ../sweep_controller
-        cargo build --target wasm32-unknown-unknown --release
-        cd ../reserve_contract
-        cargo build --target wasm32-unknown-unknown --release
-        cd ../account_factory
-        cargo build --target wasm32-unknown-unknown --release
 
     - name: Deploy to Stellar Testnet
       env:

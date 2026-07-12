@@ -121,8 +121,8 @@ contracts/
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Install Soroban CLI
-cargo install --locked soroban-cli --version 22.0.0
+# Install Stellar CLI
+cargo install --locked stellar-cli --version 23.4.1
 
 # Add wasm target
 rustup target add wasm32-unknown-unknown
@@ -151,6 +151,13 @@ export SIGNER_SECRET_KEY=...              # deployer/admin keypair (S... secret)
 export AUTHORIZED_SIGNER_PUBLIC_KEY=...   # Ed25519 pubkey SweepController verifies sweep signatures against
 export RECOVERY_ADDRESS=...               # org recovery wallet, used per-account at initialize()
 export CREATOR_ADDRESS=...                # address that initializes SweepController
+
+# Set .env values with:
+$ set -a
+source .env
+set +a
+
+# then deploy
 
 ./scripts/deploy-testnet.sh
 ```
