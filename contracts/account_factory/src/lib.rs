@@ -1,14 +1,7 @@
 #![no_std]
 
 use bridgelet_shared::{AccountInitRequest, AccountInitResult};
-
-mod ephemeral_account_contract {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/ephemeral_account.wasm"
-    );
-}
-use ephemeral_account_contract::Client as EphemeralAccountClient;
-
+use ephemeral_account::EphemeralAccountContractClient as EphemeralAccountClient;
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Vec};
 
 #[contract]

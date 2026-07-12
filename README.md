@@ -152,13 +152,6 @@ export AUTHORIZED_SIGNER_PUBLIC_KEY=...   # Ed25519 pubkey SweepController verif
 export RECOVERY_ADDRESS=...               # org recovery wallet, used per-account at initialize()
 export CREATOR_ADDRESS=...                # address that initializes SweepController
 
-# Set .env values with:
-$ set -a
-source .env
-set +a
-
-# then deploy
-
 ./scripts/deploy-testnet.sh
 ```
 

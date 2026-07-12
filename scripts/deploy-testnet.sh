@@ -1,7 +1,7 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# Bridgelet — Testnet Deployment Script
+# Bridgelet - Testnet Deployment Script
 # Deploys all four workspace contracts to Stellar testnet and records the
 # resulting contract IDs.
 #
@@ -20,15 +20,15 @@ set -euo pipefail
 #   - AUTHORIZED_SIGNER_PUBLIC_KEY env var set (Ed25519 pubkey for sweep auth)
 #   - RECOVERY_ADDRESS env var set (organization's recovery wallet)
 #   - CREATOR_ADDRESS env var set (creator for SweepController::initialize)
-#   - RESERVE_ADMIN_ADDRESS env var (optional — defaults to CREATOR_ADDRESS)
+#   - RESERVE_ADMIN_ADDRESS env var (optional - defaults to CREATOR_ADDRESS)
 # ---------------------------------------------------------------------------
-
+ 
 NETWORK="testnet"
 
 NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
 HORIZON_URL="https://horizon-testnet.stellar.org"
 SOROBAN_RPC_URL="https://soroban-testnet.stellar.org"
-WASM_DIR="target/wasm32v1-none/release"
+WASM_DIR="target/wasm32-unknown-unknown/release"
 DEPLOYMENTS_FILE="deployments/testnet.json"
 
 : "${SIGNER_SECRET_KEY:?SIGNER_SECRET_KEY must be set}"
@@ -36,9 +36,9 @@ DEPLOYMENTS_FILE="deployments/testnet.json"
 : "${RECOVERY_ADDRESS:?RECOVERY_ADDRESS must be set}"
 : "${CREATOR_ADDRESS:?CREATOR_ADDRESS must be set}"
 
-# Optional — falls back to CREATOR_ADDRESS if not explicitly provided.
+# Optional: falls back to CREATOR_ADDRESS if not explicitly provided.
 RESERVE_ADMIN_ADDRESS="${RESERVE_ADMIN_ADDRESS:-$CREATOR_ADDRESS}"
-
+ 
 echo "==> Building contracts..."
 ./scripts/build.sh
 
@@ -66,9 +66,9 @@ EPHEMERAL_WASM_HASH=$(stellar contract install \
   --network "$NETWORK" \
   --rpc-url "$SOROBAN_RPC_URL" \
   --network-passphrase "$NETWORK_PASSPHRASE")
-
+ 
 echo "    EphemeralAccount WASM hash: $EPHEMERAL_WASM_HASH"
-
+ 
 # ---------------------------------------------------------------------------
 # SweepController
 # ---------------------------------------------------------------------------
@@ -96,7 +96,6 @@ stellar contract invoke \
 
 # ---------------------------------------------------------------------------
 # ReserveContract
-# (previously never deployed by this script, despite being referenced below)
 # ---------------------------------------------------------------------------
 echo "==> Deploying ReserveContract contract..."
 RESERVE_CONTRACT_ID=$(stellar contract deploy \
@@ -105,9 +104,9 @@ RESERVE_CONTRACT_ID=$(stellar contract deploy \
   --network "$NETWORK" \
   --rpc-url "$SOROBAN_RPC_URL" \
   --network-passphrase "$NETWORK_PASSPHRASE")
-
+ 
 echo "    ReserveContract deployed: $RESERVE_CONTRACT_ID"
-
+ 
 echo "==> Initializing ReserveContract..."
 stellar contract invoke \
   --id "$RESERVE_CONTRACT_ID" \
@@ -117,10 +116,9 @@ stellar contract invoke \
   --network-passphrase "$NETWORK_PASSPHRASE" \
   -- initialize \
   --admin "$RESERVE_ADMIN_ADDRESS"
-
+ 
 # ---------------------------------------------------------------------------
 # AccountFactory
-# (previously never built or deployed by any script)
 # ---------------------------------------------------------------------------
 echo "==> Deploying AccountFactory contract..."
 FACTORY_CONTRACT_ID=$(stellar contract deploy \
@@ -129,9 +127,9 @@ FACTORY_CONTRACT_ID=$(stellar contract deploy \
   --network "$NETWORK" \
   --rpc-url "$SOROBAN_RPC_URL" \
   --network-passphrase "$NETWORK_PASSPHRASE")
-
+ 
 echo "    AccountFactory deployed: $FACTORY_CONTRACT_ID"
-
+ 
 echo "==> Initializing AccountFactory with EphemeralAccount WASM hash..."
 stellar contract invoke \
   --id "$FACTORY_CONTRACT_ID" \
@@ -141,7 +139,7 @@ stellar contract invoke \
   --network-passphrase "$NETWORK_PASSPHRASE" \
   -- initialize \
   --ephemeral_account_wasm_hash "$EPHEMERAL_WASM_HASH"
-
+ 
 # ---------------------------------------------------------------------------
 # Record deployment
 # ---------------------------------------------------------------------------
@@ -175,7 +173,7 @@ echo "    ReserveContract  : $RESERVE_CONTRACT_ID"
 echo "    AccountFactory   : $FACTORY_CONTRACT_ID"
 echo ""
 echo "    Set these in your SDK .env:"
-echo "    EPHEMERAL_ACCOUNT_CONTRACT_ID=$EPHEMERAL_CONTRACT_ID"
+echo "    STELLAR_CONTRACT_EPHEMERAL_ACCOUNT=$EPHEMERAL_CONTRACT_ID"
 echo "    SWEEP_CONTROLLER_CONTRACT_ID=$SWEEP_CONTRACT_ID"
 echo "    RESERVE_CONTRACT_CONTRACT_ID=$RESERVE_CONTRACT_ID"
 echo "    ACCOUNT_FACTORY_CONTRACT_ID=$FACTORY_CONTRACT_ID"

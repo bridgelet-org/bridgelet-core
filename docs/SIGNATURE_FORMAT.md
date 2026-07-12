@@ -4,40 +4,41 @@
 
 The sweep controller uses **Ed25519 signature verification** to ensure only authorized parties can initiate sweeps. This document describes the exact message format that must be signed off-chain and provides implementation examples.
 
-> **Correction:** an earlier version of this document included a `timestamp` component in the signed message, in every example below (TypeScript, Python, Rust) and in the Security Considerations and Troubleshooting sections. That was never accurate. The deployed contract — `contracts/sweep_controller/src/authorization.rs::construct_sweep_message()` — does not read, generate, or check a timestamp anywhere. It uses exactly **three** components. Every example in this revision has been corrected to match the real code; if you signed anything using the old examples, those signatures will not verify on-chain.
-
 ## Message Construction
 
 The message to be signed is constructed as follows:
 
 ```
 message = SHA256(
-    destination_address_xdr ||
-    sweep_nonce_be_u64      ||
-    contract_id_xdr
+    destination_address ||
+    sweep_nonce ||
+    contract_id ||
+    timestamp
 )
 ```
 
 ### Components
 
-1. **destination_address_xdr** (variable length)
+1. **destination_address** (variable length)
    - The wallet address where funds will be swept to
-   - Serialized as XDR bytes using `soroban_sdk::Address::to_xdr(&env)` — the Soroban SDK's own serialization, not a hand-rolled encoding of the `G...`/`C...` strkey
-   - Length varies by address type; don't assume a fixed size
+   - Serialized as XDR bytes (Soroban Address format)
+   - Approximately 32-40 bytes depending on account type
 
 2. **sweep_nonce** (8 bytes, big-endian)
    - Unsigned 64-bit integer
-   - Starts at 0 for the first sweep (set at `initialize()`)
-   - Increments by 1 after each successful sweep authorization
+   - Starts at 0 for the first sweep
+   - Increments by 1 after each successful authorization
    - Prevents replay attacks by invalidating previous signatures
-   - **The contract always verifies against its own current on-chain nonce.** Query it with `SweepController::get_nonce()` before signing — don't rely on a locally-tracked counter, which can drift if a sweep fails partway or another process triggers one.
 
 3. **contract_id** (variable length)
-   - The address of the sweep controller contract itself (`env.current_contract_address()`)
-   - Serialized as XDR bytes the same way as the destination
-   - Binds the signature to a specific contract deployment — a signature valid on one `SweepController` instance will not verify on another
+   - The address of the sweep controller contract itself
+   - Serialized as XDR bytes (Soroban Address format)
+   - Binds the signature to a specific contract deployment
 
-There is no timestamp, expiry, or any fourth component. The concatenated bytes above are hashed exactly once with SHA-256, and that 32-byte digest is what gets Ed25519-signed.
+4. **timestamp** (8 bytes, big-endian)
+   - Current Unix timestamp in seconds
+   - Retrieved from the Soroban ledger at verification time
+   - Prevents accidental use of stale signatures across time
 
 ### Hash Function
 
@@ -55,14 +56,12 @@ The concatenated message is hashed using **SHA-256**, producing a 32-byte digest
 The contract performs the following verification steps:
 
 1. Retrieve the authorized signer public key from contract storage
-2. Get the current sweep nonce and contract ID
+2. Get the current sweep nonce, contract ID, and current timestamp
 3. Construct the message hash using the same algorithm as the off-chain signer
-4. Verify the provided 64-byte signature against the message hash and public key — a failed verification traps the transaction rather than returning a recoverable error
+4. Verify the provided 64-byte signature against the message hash and public key
 5. If verification succeeds, increment the nonce to prevent replay
 
 ## Implementation Examples
-
-> All three examples below construct `destination_xdr` / `contract_id_xdr` as opaque byte buffers you must supply — properly producing those bytes requires XDR-serializing a Soroban `Address` the same way `Address::to_xdr()` does on-chain. Hand-rolling that serialization is easy to get subtly wrong (wrong discriminant, wrong length prefix, etc.) and produces a signature that fails to verify with no useful error message. The canonical, verified way to get these bytes right is `tools/sweep-signer/` in this repo, which uses `soroban-sdk` itself to serialize the addresses — see [Reference Implementation](#reference-implementation) below. Treat the snippets here as illustrating the message-construction algorithm, not as production-ready XDR encoders.
 
 ### TypeScript Example
 
@@ -71,24 +70,34 @@ import * as crypto from 'crypto';
 import * as ed25519 from '@noble/ed25519';
 
 interface SweepAuthParams {
-  destinationXdr: Buffer;   // Address::to_xdr() bytes — see note above
-  contractIdXdr: Buffer;    // Address::to_xdr() bytes — see note above
-  nonce: bigint;            // current on-chain nonce; query get_nonce() first
+  destination: string;        // Soroban address
+  contractId: string;         // Soroban address
+  nonce: bigint;             // Current nonce
+  timestamp: bigint;         // Current Unix timestamp
 }
 
 async function generateSweepSignature(
   params: SweepAuthParams,
   privateKey: Buffer
 ): Promise<Buffer> {
+  // Convert addresses to XDR bytes (simplified - actual implementation uses soroban-js)
+  const destinationXdr = Buffer.from(params.destination, 'base64'); // Properly XDR-encoded
+  const contractXdrId = Buffer.from(params.contractId, 'base64');   // Properly XDR-encoded
+
   // Convert nonce to big-endian bytes
   const nonceBuffer = Buffer.alloc(8);
   nonceBuffer.writeBigUInt64BE(params.nonce, 0);
 
-  // Concatenate all components — destination, nonce, contract_id, in that order
+  // Convert timestamp to big-endian bytes
+  const timestampBuffer = Buffer.alloc(8);
+  timestampBuffer.writeBigUInt64BE(params.timestamp, 0);
+
+  // Concatenate all components
   const message = Buffer.concat([
-    params.destinationXdr,
+    destinationXdr,
     nonceBuffer,
-    params.contractIdXdr,
+    contractXdrId,
+    timestampBuffer,
   ]);
 
   // Hash the message with SHA-256
@@ -106,17 +115,26 @@ async function verifySweepSignature(
   signature: Buffer,
   publicKey: Buffer
 ): Promise<boolean> {
+  // Same message construction
+  const destinationXdr = Buffer.from(params.destination, 'base64');
+  const contractXdrId = Buffer.from(params.contractId, 'base64');
+
   const nonceBuffer = Buffer.alloc(8);
   nonceBuffer.writeBigUInt64BE(params.nonce, 0);
 
+  const timestampBuffer = Buffer.alloc(8);
+  timestampBuffer.writeBigUInt64BE(params.timestamp, 0);
+
   const message = Buffer.concat([
-    params.destinationXdr,
+    destinationXdr,
     nonceBuffer,
-    params.contractIdXdr,
+    contractXdrId,
+    timestampBuffer,
   ]);
 
   const messageHash = crypto.createHash('sha256').update(message).digest();
 
+  // Verify with Ed25519
   return await ed25519.verify(signature, messageHash, publicKey);
 }
 
@@ -125,9 +143,10 @@ const privateKeyHex = 'your-private-key-hex';
 const privateKey = Buffer.from(privateKeyHex, 'hex');
 
 const params: SweepAuthParams = {
-  destinationXdr: Buffer.from('...', 'base64'), // properly XDR-encoded, see note above
-  contractIdXdr: Buffer.from('...', 'base64'),  // properly XDR-encoded, see note above
+  destination: 'GBRPYHIL2CI3...', // Soroban address
+  contractId: 'CBVG...', // Sweep controller contract ID
   nonce: 0n,
+  timestamp: BigInt(Math.floor(Date.now() / 1000)),
 };
 
 const signature = await generateSweepSignature(params, privateKey);
@@ -153,12 +172,20 @@ class SweepAuthSigner:
         destination_xdr: bytes,
         contract_id_xdr: bytes,
         nonce: int,
+        timestamp: int,
     ) -> bytes:
         """Construct the message to be signed."""
+        # Convert nonce and timestamp to big-endian bytes
         nonce_bytes = struct.pack('>Q', nonce)  # Big-endian unsigned 64-bit
+        timestamp_bytes = struct.pack('>Q', timestamp)  # Big-endian unsigned 64-bit
 
-        # Concatenate: destination, nonce, contract_id — no timestamp
-        message = destination_xdr + nonce_bytes + contract_id_xdr
+        # Concatenate all components
+        message = (
+            destination_xdr +
+            nonce_bytes +
+            contract_id_xdr +
+            timestamp_bytes
+        )
 
         return message
 
@@ -167,9 +194,15 @@ class SweepAuthSigner:
         destination_xdr: bytes,
         contract_id_xdr: bytes,
         nonce: int,
+        timestamp: int,
     ) -> bytes:
         """Generate Ed25519 signature for sweep authorization."""
-        message = self.construct_message(destination_xdr, contract_id_xdr, nonce)
+        message = self.construct_message(
+            destination_xdr,
+            contract_id_xdr,
+            nonce,
+            timestamp,
+        )
 
         # Hash the message with SHA-256
         message_hash = hashlib.sha256(message).digest()
@@ -184,10 +217,17 @@ class SweepAuthSigner:
         destination_xdr: bytes,
         contract_id_xdr: bytes,
         nonce: int,
+        timestamp: int,
         signature: bytes,
     ) -> bool:
         """Verify sweep authorization signature."""
-        message = self.construct_message(destination_xdr, contract_id_xdr, nonce)
+        message = self.construct_message(
+            destination_xdr,
+            contract_id_xdr,
+            nonce,
+            timestamp,
+        )
+
         message_hash = hashlib.sha256(message).digest()
 
         try:
@@ -201,15 +241,28 @@ class SweepAuthSigner:
 private_key_hex = 'your-private-key-hex'
 signer = SweepAuthSigner(private_key_hex)
 
-destination_xdr = b'...'  # XDR-encoded destination address, see note above
-contract_id_xdr = b'...'  # XDR-encoded contract ID, see note above
-nonce = 0  # query SweepController.get_nonce() first — don't hardcode in real use
+destination_xdr = b'...'  # XDR-encoded destination address
+contract_id_xdr = b'...'  # XDR-encoded contract ID
+nonce = 0
+timestamp = int(time.time())
 
-signature = signer.generate_signature(destination_xdr, contract_id_xdr, nonce)
+signature = signer.generate_signature(
+    destination_xdr,
+    contract_id_xdr,
+    nonce,
+    timestamp,
+)
+
 print('Signature (hex):', signature.hex())
 
 # Verify
-is_valid = signer.verify_signature(destination_xdr, contract_id_xdr, nonce, signature)
+is_valid = signer.verify_signature(
+    destination_xdr,
+    contract_id_xdr,
+    nonce,
+    timestamp,
+    signature,
+)
 print(f'Signature valid: {is_valid}')
 ```
 
@@ -233,11 +286,22 @@ impl SweepAuthSigner {
         destination_xdr: &[u8],
         contract_id_xdr: &[u8],
         nonce: u64,
+        timestamp: u64,
     ) -> Vec<u8> {
         let mut message = Vec::new();
+
+        // Add destination XDR bytes
         message.extend_from_slice(destination_xdr);
+
+        // Add nonce as big-endian bytes
         message.extend_from_slice(&nonce.to_be_bytes());
+
+        // Add contract ID XDR bytes
         message.extend_from_slice(contract_id_xdr);
+
+        // Add timestamp as big-endian bytes
+        message.extend_from_slice(&timestamp.to_be_bytes());
+
         message
     }
 
@@ -246,13 +310,21 @@ impl SweepAuthSigner {
         destination_xdr: &[u8],
         contract_id_xdr: &[u8],
         nonce: u64,
+        timestamp: u64,
     ) -> Vec<u8> {
-        let message = Self::construct_message(destination_xdr, contract_id_xdr, nonce);
+        let message = Self::construct_message(
+            destination_xdr,
+            contract_id_xdr,
+            nonce,
+            timestamp,
+        );
 
+        // Hash with SHA-256
         let mut hasher = Sha256::new();
         hasher.update(&message);
         let message_hash = hasher.finalize();
 
+        // Sign with Ed25519
         let signature = self.signing_key.sign(&message_hash);
         signature.to_bytes().to_vec()
     }
@@ -262,9 +334,15 @@ impl SweepAuthSigner {
         destination_xdr: &[u8],
         contract_id_xdr: &[u8],
         nonce: u64,
+        timestamp: u64,
         signature_bytes: &[u8; 64],
     ) -> bool {
-        let message = Self::construct_message(destination_xdr, contract_id_xdr, nonce);
+        let message = Self::construct_message(
+            destination_xdr,
+            contract_id_xdr,
+            nonce,
+            timestamp,
+        );
 
         let mut hasher = Sha256::new();
         hasher.update(&message);
@@ -279,22 +357,23 @@ impl SweepAuthSigner {
 let private_key_bytes = [0u8; 32]; // Load from secure storage
 let signer = SweepAuthSigner::new(&private_key_bytes);
 
-let destination_xdr = b"..."; // XDR-encoded destination, see note above
-let contract_id_xdr = b"..."; // XDR-encoded contract ID, see note above
-let nonce = 0u64; // query get_nonce() first — don't hardcode in real use
+let destination_xdr = b"..."; // XDR-encoded destination
+let contract_id_xdr = b"..."; // XDR-encoded contract ID
+let nonce = 0u64;
+let timestamp = std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .unwrap()
+    .as_secs();
 
-let signature = signer.generate_signature(destination_xdr, contract_id_xdr, nonce);
+let signature = signer.generate_signature(
+    destination_xdr,
+    contract_id_xdr,
+    nonce,
+    timestamp,
+);
+
 println!("Signature: {}", hex::encode(&signature));
 ```
-
-### Reference Implementation
-
-Rather than any of the illustrative snippets above, the tool actually checked against the real `soroban-sdk` XDR serialization lives at `tools/sweep-signer/` in this repo. It's a small Rust CLI that:
-- Takes a Stellar secret key, destination address, contract ID, and nonce
-- Uses `soroban_sdk::Address::to_xdr()` directly (via a local, network-free `Env`) to guarantee byte-identical serialization to what the deployed contract computes
-- Outputs the hex signature ready to pass to `execute_sweep()`
-
-See its `--help` output or the repo README for usage. If you're building an off-chain signing service in another language, the safest path today is to shell out to this tool (or a compiled build of it) rather than re-deriving the XDR bytes independently.
 
 ## Integration with Off-Chain System
 
@@ -302,9 +381,10 @@ The off-chain system should:
 
 1. **Receive sweep request** from the user with destination address and amount
 2. **Query current contract state** to get:
-   - Current nonce, via `SweepController::get_nonce()`
-   - Contract ID (the deployed `SweepController` address)
-3. **Construct message** using the format above (destination, nonce, contract_id — no timestamp)
+   - Current nonce
+   - Contract ID
+   - Current timestamp
+3. **Construct message** using the format above
 4. **Sign message** with the authorized signer's private key
 5. **Call `execute_sweep` contract function** with the generated signature
 
@@ -315,13 +395,12 @@ The off-chain system should:
 - The **nonce mechanism** ensures each sweep signature is unique
 - After successful authorization, the nonce is incremented
 - Attempting to reuse an old signature will fail because the nonce has changed
-- There is currently no way to query the nonce other than calling `get_nonce()` directly on the deployed contract — don't assume a value without checking
 
 ### Signature Validity
 
 - Signatures are **bound to a specific contract deployment** via contract_id
 - Signatures cannot be used against a different deployment
-- Signatures do **not** expire based on time — there is no timestamp or expiry window in this scheme. The only thing that invalidates a previously-issued, not-yet-used signature is the nonce advancing (i.e. another sweep happening first). If you need time-bounded authorization, that would have to be built as a new feature — it does not exist today.
+- The **timestamp component** allows for potential future time-based restrictions
 
 ### Key Management
 
@@ -337,9 +416,9 @@ The off-chain system should:
 
 ### "SignatureVerificationFailed" Error
 - The signature does not match the expected message
-- Verify that all message components are constructed correctly, in order: destination XDR, then 8-byte big-endian nonce, then contract ID XDR — no timestamp
+- Verify that all message components are constructed correctly
 - Ensure the correct public key is being used for verification
-- Check that the nonce used matches the contract's current `get_nonce()` value at the moment of signing — it may have advanced since you last checked
+- Check that nonce values are synchronized (they increment after each successful sweep)
 
 ### "InvalidSignature" Error
 - The signature format is incorrect (must be exactly 64 bytes)
@@ -348,7 +427,7 @@ The off-chain system should:
 
 ## Testing
 
-To generate a standalone Ed25519 keypair for testing signature verification against a locally-deployed contract:
+To generate test vectors for testing signature verification:
 
 ```bash
 # Generate Ed25519 keypair
@@ -362,6 +441,4 @@ openssl pkey -outform DER -pubout -in private.pem | tail -c 32 | xxd -p
 openssl pkey -outform DER -in private.pem | tail -c 32 | xxd -p
 ```
 
-Note: this gives you a generic raw Ed25519 keypair, not a Stellar-strkey-formatted one — fine for setting `authorized_signer` directly as raw bytes at `initialize()`, but if you need an `S...`/`G...` Stellar keypair instead (e.g. to reuse `tools/sweep-signer`, which accepts an `S...` secret), generate it with `stellar keys generate` instead — see the root README's "Getting testnet keys" guidance.
-
-Then use the examples above, or `tools/sweep-signer`, to generate and verify test signatures.
+Then use the examples above to generate and verify test signatures.
