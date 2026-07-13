@@ -1,7 +1,7 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# Bridgelet — Testnet Deployment Script
+# Bridgelet - Testnet Deployment Script
 # Deploys all four workspace contracts to Stellar testnet and records the
 # resulting contract IDs.
 #
@@ -20,7 +20,7 @@ set -euo pipefail
 #   - AUTHORIZED_SIGNER_PUBLIC_KEY env var set (Ed25519 pubkey for sweep auth)
 #   - RECOVERY_ADDRESS env var set (organization's recovery wallet)
 #   - CREATOR_ADDRESS env var set (creator for SweepController::initialize)
-#   - RESERVE_ADMIN_ADDRESS env var (optional — defaults to CREATOR_ADDRESS)
+#   - RESERVE_ADMIN_ADDRESS env var (optional - defaults to CREATOR_ADDRESS)
 # ---------------------------------------------------------------------------
 
 NETWORK="testnet"
@@ -36,7 +36,7 @@ DEPLOYMENTS_FILE="deployments/testnet.json"
 : "${RECOVERY_ADDRESS:?RECOVERY_ADDRESS must be set}"
 : "${CREATOR_ADDRESS:?CREATOR_ADDRESS must be set}"
 
-# Optional — falls back to CREATOR_ADDRESS if not explicitly provided.
+# Optional - falls back to CREATOR_ADDRESS if not explicitly provided.
 RESERVE_ADMIN_ADDRESS="${RESERVE_ADMIN_ADDRESS:-$CREATOR_ADDRESS}"
 
 echo "==> Building contracts..."
