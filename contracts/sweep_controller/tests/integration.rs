@@ -375,6 +375,7 @@ fn test_initialize_with_authorized_destination() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Full Integration Test Suite — Issue #165
 // Issue #160: Full integration test suite — EphemeralAccount + SweepController
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -419,7 +420,6 @@ fn setup_full_lifecycle(
     let recipient = Address::generate(env);
     let destination = recipient.clone();
 
-    // Initialize controller with locked destination matching recipient
     controller_client
         .mock_auths(&[soroban_sdk::testutils::MockAuth {
             address: &controller_creator,
@@ -466,7 +466,6 @@ fn setup_full_lifecycle(
             &account_creator,
         );
 
-    // Record payment
     let asset = Address::generate(env);
     env.mock_all_auths_allowing_non_root_auth();
     ephemeral_client.record_payment(&500, &asset);
@@ -481,8 +480,7 @@ fn setup_full_lifecycle(
     )
 }
 
-/// Deploy → initialize controller → initialize account → record payment → claim.
-/// Verifies the complete happy-path lifecycle including final state.
+/// Deploy → init → record → claim → verify full state including reserve.
 #[test]
 fn test_full_lifecycle_deploy_init_record_claim_verify_state() {
     let env = Env::default();
@@ -490,7 +488,6 @@ fn test_full_lifecycle_deploy_init_record_claim_verify_state() {
     let (controller_client, ephemeral_client, ephemeral_id, recipient, _asset) =
         setup_full_lifecycle(&env);
 
-    // -- Verify pre-claim state --
     assert_eq!(
         ephemeral_client.get_status(),
         AccountStatus::PaymentReceived
@@ -502,7 +499,6 @@ fn test_full_lifecycle_deploy_init_record_claim_verify_state() {
     assert_eq!(info_before.payment_count, 1);
     assert_eq!(info_before.payments.get(0).unwrap().amount, 500);
 
-    // -- Claim via SweepController --
     controller_client
         .mock_auths(&[soroban_sdk::testutils::MockAuth {
             address: &recipient,
@@ -515,24 +511,22 @@ fn test_full_lifecycle_deploy_init_record_claim_verify_state() {
         }])
         .claim(&recipient, &ephemeral_id);
 
-    // -- Verify final state --
     assert_eq!(ephemeral_client.get_status(), AccountStatus::Swept);
     let info_after = ephemeral_client.get_info();
     assert_eq!(info_after.swept_to, Some(recipient.clone()));
     assert_eq!(info_after.payment_count, 1);
 
-    // -- Verify reserve reclaimed --
     assert_eq!(ephemeral_client.get_reserve_remaining(), 0);
     assert!(ephemeral_client.is_reserve_reclaimed());
 
     let reserve_event = ephemeral_client.get_last_reserve_event().unwrap();
     assert_eq!(reserve_event.destination, recipient);
-    assert_eq!(reserve_event.amount, 1_000_000_000); // BASE_RESERVE_STROOPS
+    assert_eq!(reserve_event.amount, 1_000_000_000);
     assert!(reserve_event.fully_reclaimed);
     assert_eq!(ephemeral_client.get_reserve_reclaim_event_count(), 1);
 }
 
-/// Full lifecycle with multiple assets recorded before claim.
+/// Full lifecycle with multiple assets.
 #[test]
 fn test_full_lifecycle_multi_asset_claim() {
     let env = Env::default();
@@ -593,7 +587,6 @@ fn test_full_lifecycle_multi_asset_claim() {
             &account_creator,
         );
 
-    // Record 3 different assets
     let asset1 = Address::generate(&env);
     let asset2 = Address::generate(&env);
     let asset3 = Address::generate(&env);
@@ -607,7 +600,6 @@ fn test_full_lifecycle_multi_asset_claim() {
     assert_eq!(info.payment_count, 3);
     assert_eq!(info.status, AccountStatus::PaymentReceived);
 
-    // Claim
     controller_client
         .mock_auths(&[soroban_sdk::testutils::MockAuth {
             address: &recipient,
@@ -626,13 +618,12 @@ fn test_full_lifecycle_multi_asset_claim() {
         Some(recipient.clone())
     );
 
-    // Verify each payment preserved in info
     let final_info = ephemeral_client.get_info();
     let total: i128 = final_info.payments.iter().map(|p| p.amount).sum();
-    assert_eq!(total, 600); // 100 + 200 + 300
+    assert_eq!(total, 600);
 }
 
-/// Expire flow: after expiry ledger, anyone can trigger expire to route funds to recovery.
+/// Expire flow: funds route to recovery_address.
 #[test]
 fn test_full_expire_flow_funds_to_recovery() {
     let env = Env::default();
@@ -655,10 +646,8 @@ fn test_full_expire_flow_funds_to_recovery() {
     let asset = Address::generate(&env);
     ephemeral_client.record_payment(&1_000, &asset);
 
-    // Advance ledger past expiry
     env.ledger().set_sequence_number(expiry);
 
-    // Expire is permissionless
     ephemeral_client.expire();
 
     assert_eq!(ephemeral_client.get_status(), AccountStatus::Expired);
@@ -668,7 +657,7 @@ fn test_full_expire_flow_funds_to_recovery() {
     assert!(ephemeral_client.is_reserve_reclaimed());
 }
 
-/// Recover flow: creator or recovery_address can trigger recovery after expiry.
+/// Recover flow: creator triggers recovery after expiry.
 #[test]
 fn test_full_recover_flow_creator_after_expiry() {
     let env = Env::default();
@@ -700,7 +689,7 @@ fn test_full_recover_flow_creator_after_expiry() {
     assert_eq!(info.swept_to, Some(recovery));
 }
 
-/// Sweep is rejected after expiry via claim.
+/// Sweep rejected after expiry via claim.
 #[test]
 fn test_sweep_rejected_after_expiry_via_claim() {
     let env = Env::default();
@@ -708,7 +697,6 @@ fn test_sweep_rejected_after_expiry_via_claim() {
     let recipient = Address::generate(&env);
     let (controller_client, _ephemeral_client, ephemeral_id, _, _) = setup_full_lifecycle(&env);
 
-    // Advance past expiry
     env.ledger()
         .set_sequence_number(env.ledger().sequence() + 2_000);
 
@@ -716,7 +704,7 @@ fn test_sweep_rejected_after_expiry_via_claim() {
     assert!(result.is_err());
 }
 
-/// Sweep is rejected when no payment has been recorded.
+/// Sweep rejected when no payment recorded.
 #[test]
 fn test_sweep_rejected_when_no_payment_recorded() {
     let env = Env::default();
@@ -778,12 +766,11 @@ fn test_sweep_rejected_when_no_payment_recorded() {
             &account_creator,
         );
 
-    // No payment recorded
     let result = controller_client.try_claim(&recipient, &ephemeral_id);
     assert!(result.is_err());
 }
 
-/// Double sweep via claim is rejected.
+/// Double claim rejected.
 #[test]
 fn test_double_claim_rejected() {
     let env = Env::default();
@@ -791,7 +778,6 @@ fn test_double_claim_rejected() {
     let (controller_client, ephemeral_client, ephemeral_id, recipient, _) =
         setup_full_lifecycle(&env);
 
-    // First claim succeeds
     controller_client
         .mock_auths(&[soroban_sdk::testutils::MockAuth {
             address: &recipient,
@@ -805,21 +791,19 @@ fn test_double_claim_rejected() {
         .claim(&recipient, &ephemeral_id);
     assert_eq!(ephemeral_client.get_status(), AccountStatus::Swept);
 
-    // Second claim fails
     let result = controller_client.try_claim(&recipient, &ephemeral_id);
     assert!(result.is_err());
 }
 
-/// Sweep to wrong destination in locked mode is rejected.
+/// Locked destination rejects wrong address.
 #[test]
 fn test_locked_destination_rejects_wrong_address() {
     let env = Env::default();
 
     let (controller_client, _, _, _, _) = setup_full_lifecycle(&env);
 
-    // Try to claim with a different recipient
     let wrong_recipient = Address::generate(&env);
-    let ephemeral_id_wrong = Address::generate(&env); // doesn't matter, claim will fail first
+    let ephemeral_id_wrong = Address::generate(&env);
 
     let result = controller_client.try_claim(&wrong_recipient, &ephemeral_id_wrong);
     assert!(result.is_err());
@@ -849,13 +833,11 @@ fn test_can_sweep_reflects_account_state() {
         &account_creator,
     );
 
-    // No payment yet — can_sweep should be false
+    // Active with no payment → can_sweep should be false
     assert!(!controller_client.can_sweep(&ephemeral_id));
 
-    // Record payment
+    // PaymentReceived → can_sweep should be true
     ephemeral_client.record_payment(&100, &Address::generate(&env));
-
-    // Has payment and active — can_sweep should be true
     assert!(controller_client.can_sweep(&ephemeral_id));
 
     // Claim via locked destination
@@ -877,7 +859,6 @@ fn test_can_sweep_reflects_account_state() {
         }])
         .initialize(&creator2, &authorized_signer2, &Some(recipient.clone()));
 
-    // Re-init account with new controller
     let ephemeral_id2 = env.register(EphemeralAccountContract, ());
     let ephemeral_client2 = EphemeralAccountContractClient::new(&env, &ephemeral_id2);
     let account_creator2 = Address::generate(&env);
@@ -894,7 +875,6 @@ fn test_can_sweep_reflects_account_state() {
 
     assert!(controller_client2.can_sweep(&ephemeral_id2));
 
-    // Claim
     controller_client2
         .mock_auths(&[soroban_sdk::testutils::MockAuth {
             address: &recipient,
@@ -907,11 +887,10 @@ fn test_can_sweep_reflects_account_state() {
         }])
         .claim(&recipient, &ephemeral_id2);
 
-    // Already claimed — can_sweep should be false
     assert!(!controller_client2.can_sweep(&ephemeral_id2));
 }
 
-/// Verify sweep event is emitted during claim flow.
+/// SweepCompleted event emitted during claim.
 #[test]
 fn test_claim_emits_sweep_completed_event() {
     let env = Env::default();
@@ -931,7 +910,6 @@ fn test_claim_emits_sweep_completed_event() {
         }])
         .claim(&recipient, &ephemeral_id);
 
-    // Check the event log for sweep_completed
     let events = env.events().all();
     let mut found_sweep_event = false;
     for i in 0..events.len() {
@@ -944,4 +922,257 @@ fn test_claim_emits_sweep_completed_event() {
         }
     }
     assert!(found_sweep_event, "SweepCompleted event should be emitted");
+}
+
+// ── Additional tests for Issue #165 ──
+
+/// Nonce starts at 0 after initialization.
+#[test]
+fn test_nonce_starts_at_zero() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (controller_client, _, _, _, _) = setup_full_lifecycle(&env);
+
+    assert_eq!(controller_client.get_nonce(), 0);
+}
+
+/// Multiple ephemeral accounts can be managed by the same controller.
+#[test]
+fn test_single_controller_manages_multiple_accounts() {
+    let env = Env::default();
+
+    let (controller_client, controller_id, _, _) = deploy_contracts(&env);
+
+    let controller_creator = Address::generate(&env);
+    let (authorized_signer, _) = generate_test_keypair(&env);
+    let recipient = Address::generate(&env);
+
+    controller_client
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &controller_creator,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &controller_id,
+                fn_name: "initialize",
+                args: (
+                    &controller_creator,
+                    &authorized_signer,
+                    &Some(recipient.clone()),
+                )
+                    .into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .initialize(
+            &controller_creator,
+            &authorized_signer,
+            &Some(recipient.clone()),
+        );
+
+    // Create two ephemeral accounts under the same controller
+    let mut ephemeral_ids = std::vec::Vec::new();
+    for _ in 0..2 {
+        let ephemeral_id = env.register(EphemeralAccountContract, ());
+        let ephemeral_client = EphemeralAccountContractClient::new(&env, &ephemeral_id);
+        let account_creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let expiry = env.ledger().sequence() + 1_000;
+
+        ephemeral_client
+            .mock_auths(&[soroban_sdk::testutils::MockAuth {
+                address: &account_creator,
+                invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                    contract: &ephemeral_id,
+                    fn_name: "initialize",
+                    args: (
+                        &account_creator,
+                        &expiry,
+                        &recovery,
+                        &controller_id,
+                        &account_creator,
+                    )
+                        .into_val(&env),
+                    sub_invokes: &[],
+                },
+            }])
+            .initialize(
+                &account_creator,
+                &expiry,
+                &recovery,
+                &controller_id,
+                &account_creator,
+            );
+
+        let asset = Address::generate(&env);
+        env.mock_all_auths_allowing_non_root_auth();
+        ephemeral_client.record_payment(&100, &asset);
+        env.set_auths(&[]);
+
+        assert!(controller_client.can_sweep(&ephemeral_id));
+        ephemeral_ids.push(ephemeral_id);
+    }
+
+    // Claim the first account
+    let first_id = ephemeral_ids.get(0).unwrap();
+    controller_client
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &recipient,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &controller_client.address,
+                fn_name: "claim",
+                args: (&recipient, first_id).into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .claim(&recipient, first_id);
+
+    // First is claimed, second is still sweepable
+    assert!(!controller_client.can_sweep(first_id));
+    let second_id = ephemeral_ids.get(1).unwrap();
+    assert!(controller_client.can_sweep(second_id));
+}
+
+/// Expire via recovery_address (not creator) after expiry.
+#[test]
+fn test_recovery_address_can_expire_account() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (_, _, ephemeral_client, _) = deploy_contracts(&env);
+
+    let account_creator = Address::generate(&env);
+    let recovery = Address::generate(&env);
+    let expiry = env.ledger().sequence() + 5;
+
+    ephemeral_client.initialize(
+        &account_creator,
+        &expiry,
+        &recovery,
+        &Address::generate(&env),
+        &account_creator,
+    );
+
+    let asset = Address::generate(&env);
+    ephemeral_client.record_payment(&500, &asset);
+
+    env.ledger().set_sequence_number(expiry);
+
+    // expire() is permissionless - anyone can call it
+    ephemeral_client.expire();
+
+    assert_eq!(ephemeral_client.get_status(), AccountStatus::Expired);
+    assert_eq!(ephemeral_client.get_info().swept_to, Some(recovery));
+}
+
+/// get_info returns correct state at each lifecycle stage.
+#[test]
+fn test_get_info_reflects_lifecycle_stages() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (_, _, ephemeral_client, _) = deploy_contracts(&env);
+
+    let account_creator = Address::generate(&env);
+    let recovery = Address::generate(&env);
+    let expiry = env.ledger().sequence() + 1_000;
+
+    ephemeral_client.initialize(
+        &account_creator,
+        &expiry,
+        &recovery,
+        &Address::generate(&env),
+        &account_creator,
+    );
+
+    // Stage: Active
+    let info = ephemeral_client.get_info();
+    assert_eq!(info.status, AccountStatus::Active);
+    assert!(!info.payment_received);
+    assert_eq!(info.payment_count, 0);
+
+    // Stage: PaymentReceived
+    let asset = Address::generate(&env);
+    ephemeral_client.record_payment(&100, &asset);
+
+    let info = ephemeral_client.get_info();
+    assert_eq!(info.status, AccountStatus::PaymentReceived);
+    assert!(info.payment_received);
+    assert_eq!(info.payment_count, 1);
+    assert_eq!(info.creator, account_creator);
+    assert_eq!(info.expiry_ledger, expiry);
+    assert_eq!(info.recovery_address, recovery);
+}
+
+/// Claim with flexible controller (no locked destination) succeeds for any recipient.
+#[test]
+fn test_claim_with_flexible_destination() {
+    let env = Env::default();
+
+    let (controller_client, controller_id, ephemeral_client, ephemeral_id) = deploy_contracts(&env);
+
+    let controller_creator = Address::generate(&env);
+    let (authorized_signer, _) = generate_test_keypair(&env);
+
+    // Initialize without locked destination
+    controller_client
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &controller_creator,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &controller_id,
+                fn_name: "initialize",
+                args: (&controller_creator, &authorized_signer, &None::<Address>).into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .initialize(&controller_creator, &authorized_signer, &None);
+
+    let account_creator = Address::generate(&env);
+    let recovery = Address::generate(&env);
+    let expiry = env.ledger().sequence() + 1_000;
+
+    ephemeral_client
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &account_creator,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &ephemeral_id,
+                fn_name: "initialize",
+                args: (
+                    &account_creator,
+                    &expiry,
+                    &recovery,
+                    &controller_id,
+                    &account_creator,
+                )
+                    .into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .initialize(
+            &account_creator,
+            &expiry,
+            &recovery,
+            &controller_id,
+            &account_creator,
+        );
+
+    let asset = Address::generate(&env);
+    env.mock_all_auths_allowing_non_root_auth();
+    ephemeral_client.record_payment(&100, &asset);
+    env.set_auths(&[]);
+
+    let any_recipient = Address::generate(&env);
+    controller_client
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &any_recipient,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &controller_client.address,
+                fn_name: "claim",
+                args: (&any_recipient, &ephemeral_id).into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .claim(&any_recipient, &ephemeral_id);
+
+    assert_eq!(ephemeral_client.get_status(), AccountStatus::Swept);
+    assert_eq!(ephemeral_client.get_info().swept_to, Some(any_recipient));
 }
