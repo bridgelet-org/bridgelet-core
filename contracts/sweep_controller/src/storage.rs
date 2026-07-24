@@ -125,3 +125,12 @@ pub fn set_creator(env: &Env, creator: &Address) {
 pub fn get_creator(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::Creator)
 }
+
+const INSTANCE_TTL_THRESHOLD: u32 = 100;
+const INSTANCE_TTL_EXTEND_TO: u32 = 518_400;
+
+pub fn extend_instance_ttl(env: &Env) {
+    env.storage()
+        .instance()
+        .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND_TO);
+}
