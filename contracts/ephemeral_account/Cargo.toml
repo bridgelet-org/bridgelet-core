@@ -13,3 +13,9 @@ bridgelet-shared = { path = "../shared", version = "0.1.0" }
 
 [dev-dependencies]
 soroban-sdk = { version = "22.0.0", features = ["testutils"] }
+# Pin to the version Cargo.lock already records for the workspace (`1.11.0`).
+# Required by `contracts/ephemeral_account/tests/property_tests.rs`
+# (`use proptest::prelude::*`, `proptest! { ... }` macro). Without this dep,
+# `cargo test` fails on this file with error[E0433]: unresolved crate `proptest`
+# even though proptest is reachable transitively via the lockfile.
+proptest = "1.11"
