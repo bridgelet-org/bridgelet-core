@@ -237,11 +237,15 @@ fn update_authorized_destination(env: Env, new_destination: Address) -> Result<(
 
 `transfers::execute_transfers()` iterates every `Payment` returned by `EphemeralAccount::get_info()` and calls `TokenClient::new(env, &payment.asset).transfer(from, destination, &payment.amount)` for each — atomic multi-asset sweep in one call.
 
-#### `claim()` — gas-free path
+#### `claim()` — gas-free path & frontrunning considerations
 `recipient.require_auth()` (Soroban native auth on the outer transaction) replaces the Ed25519 signature entirely; the controller then authorizes itself as invoker of `EphemeralAccount::sweep_claim()`. This lets a relayer submit and pay fees while only the recipient signs.
 
+> **Security & Nonce Note:** 
+> 1. `claim()` does **not** increment `SweepController`'s `sweep_nonce`. Because `update_authorized_destination()` checks `nonce > 0` to lock destination updates, executing sweeps exclusively via `claim()` leaves `nonce == 0`, allowing destination updates to occur after a claim.
+> 2. In **Flexible Mode** (`authorized_destination = None`), `claim()` does not verify an Ed25519 signature and relies solely on `recipient.require_auth()`. A frontrunner in the mempool observing `claim(legitimate_recipient, ephemeral)` could submit `claim(attacker, ephemeral)` with a higher fee to sweep funds to themselves. In **Locked Mode** (`authorized_destination = Some(...)`), frontrunning is prevented as `validate_destination()` enforces `recipient == authorized_destination`.
+
 #### Destination locking
-If `authorized_destination` was set at `initialize()`, every `execute_sweep`/`claim` call is checked against it (`validate_destination`) and can be changed via `update_authorized_destination()` — but only before any sweep has occurred (`nonce == 0` check).
+If `authorized_destination` was set at `initialize()`, every `execute_sweep`/`claim` call is checked against it (`validate_destination`) and can be changed via `update_authorized_destination()` — but only before any signed sweep has occurred (`nonce == 0` check).
 
 #### Errors
 `InvalidAccount, TransferFailed, AuthorizationFailed, InsufficientBalance, AccountNotReady, AccountExpired, AccountAlreadySwept, InvalidSignature, SignatureVerificationFailed, AuthorizedSignerNotSet, InvalidNonce, UnauthorizedDestination` (discriminant `12` is unused/skipped — likely a removed variant; harmless in Rust but worth a cleanup pass).
@@ -280,9 +284,11 @@ fn batch_initialize(
 ) -> Vec<AccountInitResult>;
 ```
 
-Deploys a new `ephemeral_account` instance per request via `env.deployer().with_current_contract(salt).deploy_v2(...)`, using an index-derived salt, then calls `try_initialize()` on each. All accounts created this way get `authorized_controller = creator` and `admin = creator` (the factory passes `creator` for both of the last two `initialize` args).
+Deploys a new `ephemeral_account` instance per request via `env.deployer().with_current_contract(salt).deploy_v2(...)`, using an index-derived salt (`salt_bytes[28..32] = index as u32`), then calls `try_initialize()` on each. All accounts created this way get `authorized_controller = creator` and `admin = creator` (the factory passes `creator` for both of the last two `initialize` args).
 
-**Known gap:** on a per-account failure, `AccountInitResult.error` is hardcoded to `None` (see inline comment: *"In a real implementation, we'd serialize errors"*). Callers can detect `success: false` but not the cause.
+**Known gaps & Security Notes:**
+1. **Salt Collision Vulnerability:** `batch_initialize()` derives salts using only the loop index `0..requests.len()`. On subsequent calls to `batch_initialize()`, the loop indices reset to `0`, generating identical salts. Deploying contracts with identical salts under the same factory address causes transaction failure or address collisions.
+2. **Error Suppression:** On a per-account failure, `AccountInitResult.error` is hardcoded to `None` (see inline comment: *"In a real implementation, we'd serialize errors"*). Callers can detect `success: false` but not the cause.
 
 **Not wired into tooling:** not built by `scripts/build.sh`, not deployed by `scripts/deploy-testnet.sh`, not covered by either CI workflow.
 
