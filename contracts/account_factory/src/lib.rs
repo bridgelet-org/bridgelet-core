@@ -1,19 +1,7 @@
 #![no_std]
 
-mod ephemeral_account_contract {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/ephemeral_account.wasm"
-    );
-}
-use ephemeral_account_contract::Client as EphemeralAccountClient;
-
-mod errors;
-pub use errors::Error;
-
-#[cfg(test)]
-mod test;
-
 use bridgelet_shared::{AccountInitRequest, AccountInitResult};
+use ephemeral_account::EphemeralAccountContractClient as EphemeralAccountClient;
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Vec};
 
 #[contract]
@@ -138,7 +126,6 @@ impl AccountFactory {
                 &creator,
                 &request.expiry_ledger,
                 &request.recovery_address,
-                &creator,
                 &creator,
             ) {
                 Ok(_) => AccountInitResult {

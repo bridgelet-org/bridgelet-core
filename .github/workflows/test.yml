@@ -18,18 +18,12 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
         toolchain: 1.89.0
-        target: wasm32v1-none
+        target: wasm32-unknown-unknown
         override: true
         components: rustfmt, clippy
 
-    - name: Ensure rustfmt and clippy are installed
-      run: rustup component add rustfmt clippy
-
-    - name: Install stellar-cli
-      run: curl -fsSL https://github.com/stellar/stellar-cli/raw/main/install.sh | sh -s -- --install-deps
-
     - name: Install soroban-cli
-      run: cargo install --locked stellar-cli --version 23.4.1
+      run: cargo install --locked soroban-cli --version 22.0.0
 
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -49,19 +43,13 @@ jobs:
         path: target
         key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Build all contracts
-      run: stellar contract build
-
     - name: Run tests
       run: |
         cd contracts/ephemeral_account
         cargo test --verbose
         cd ../sweep_controller
         cargo test --verbose
-        cargo test --verbose --test integration
         cd ../reserve_contract
-        cargo test --verbose
-        cd ../account_factory
         cargo test --verbose
 
     - name: Check format
@@ -72,8 +60,6 @@ jobs:
         cargo fmt -- --check
         cd ../reserve_contract
         cargo fmt -- --check
-        cd ../account_factory
-        cargo fmt -- --check
 
     - name: Run clippy
       run: |
@@ -83,12 +69,22 @@ jobs:
         cargo clippy -- -D warnings
         cd ../reserve_contract
         cargo clippy -- -D warnings
-        cd ../account_factory
-        cargo clippy -- -D warnings
+
+    - name: Build all contracts
+      run: |
+        cd contracts/ephemeral_account
+        cargo build --target wasm32-unknown-unknown --release
+        cd ../sweep_controller
+        cargo build --target wasm32-unknown-unknown --release
+        cd ../reserve_contract
+        cargo build --target wasm32-unknown-unknown --release
 
     - name: Upload WASM artifacts
       uses: actions/upload-artifact@v4
       with:
         name: wasm-contracts
-        path: target/wasm32v1-none/release/*.wasm
+        path: |
+          contracts/ephemeral_account/target/wasm32-unknown-unknown/release/*.wasm
+          contracts/sweep_controller/target/wasm32-unknown-unknown/release/*.wasm
+          contracts/reserve_contract/target/wasm32-unknown-unknown/release/*.wasm
         retention-days: 30

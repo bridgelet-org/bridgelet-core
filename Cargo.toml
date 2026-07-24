@@ -8,11 +8,16 @@ members = [
     "contracts/account_factory",
 ]
 
-# Issue #41: centralise the soroban-sdk version pin for every workspace member.
+# Centralised dependency pins inherited via `soroban-sdk = { workspace = true }`
+# by `contracts/ephemeral_account`, `contracts/sweep_controller`,
+# `contracts/reserve_contract`, and `contracts/shared`. Version is kept in
+# lockstep with the `soroban-sdk = "22.0.0"` pin already present in every
+# contract's `[dev-dependencies]` and with the `soroban-cli 22.0.0` install
+# in `.github/workflows/test.yml`.
 [workspace.dependencies]
 soroban-sdk = "22.0.0"
 
-[profile.release]
+[profile.release] 
 opt-level = "z"
 overflow-checks = true
 debug = 0
