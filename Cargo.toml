@@ -8,7 +8,10 @@ members = [
     "contracts/account_factory",
 ]
 
-# Issue #41: centralise the soroban-sdk version pin for every workspace member.
+# Issues #41 / #42: soroban-sdk is pinned to 22.0.0 in exactly one place — here.
+# Every workspace member inherits it via `soroban-sdk = { workspace = true }`,
+# so no contract declares its own version. See docs/soroban-sdk-version-policy.md
+# for the upgrade process (bump here only, then verify on testnet before merge).
 [workspace.dependencies]
 soroban-sdk = "22.0.0"
 
