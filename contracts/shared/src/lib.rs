@@ -1,5 +1,16 @@
 #![no_std]
 
+pub mod errors;
+pub mod passphrase;
+pub mod storage_keys;
 mod types;
 
-pub use types::{AccountInfo, AccountInitRequest, AccountInitResult, AccountStatus, Payment};
+#[cfg(test)]
+pub mod test_utils;
+
+pub use errors::SharedError;
+pub use storage_keys::StorageKey;
+pub use types::{
+    AccountInfo, AccountInitRequest, AccountInitResult, AccountStatus, AssetBalance,
+    ContractVersion, Payment, SweepPayload,
+};
