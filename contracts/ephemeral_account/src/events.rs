@@ -1,51 +1,12 @@
+// Issue #40: event schemas are defined once in the shared crate and re-exported
+// here so existing `events::AccountCreated` (etc.) references keep working.
+pub use bridgelet_shared::{
+    AccountCreated, AccountExpired, MultiPaymentReceived, PaymentReceived, ReserveReclaimed,
+    SweepExecutedMulti,
+};
+
 use bridgelet_shared::Payment;
-use soroban_sdk::{contracttype, symbol_short, Address, Env, Vec};
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AccountCreated {
-    pub creator: Address,
-    pub expiry_ledger: u32,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PaymentReceived {
-    pub amount: i128,
-    pub asset: Address,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SweepExecutedMulti {
-    pub destination: Address,
-    pub payments: Vec<Payment>,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MultiPaymentReceived {
-    pub asset: Address,
-    pub amount: i128,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AccountExpired {
-    pub recovery_address: Address,
-    pub amount_returned: i128,
-    pub reserve_amount: i128,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ReserveReclaimed {
-    pub destination: Address,
-    pub amount: i128,
-    pub sweep_id: u64,
-    pub fully_reclaimed: bool,
-    pub remaining_reserve: i128,
-}
+use soroban_sdk::{symbol_short, Address, Env, Vec};
 
 pub fn emit_account_created(env: &Env, creator: Address, expiry_ledger: u32) {
     let event = AccountCreated {
