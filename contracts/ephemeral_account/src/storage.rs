@@ -226,3 +226,14 @@ pub fn set_admin(env: &Env, admin: &Address) {
 pub fn get_admin(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::Admin)
 }
+
+// TTL management
+
+const INSTANCE_TTL_THRESHOLD: u32 = 100;
+const INSTANCE_TTL_EXTEND_TO: u32 = 518_400;
+
+pub fn extend_instance_ttl(env: &Env) {
+    env.storage()
+        .instance()
+        .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND_TO);
+}
