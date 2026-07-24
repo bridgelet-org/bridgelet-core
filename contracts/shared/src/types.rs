@@ -1,6 +1,5 @@
 use soroban_sdk::{contracttype, Address, Bytes, Vec};
 
-// Represents a payment received by the ephemeral account.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Payment {
@@ -8,7 +7,7 @@ pub struct Payment {
     pub amount: i128,
     pub timestamp: u64,
 }
-// The current status of an ephemeral account.
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq, Copy)]
 #[repr(u32)]
@@ -19,7 +18,6 @@ pub enum AccountStatus {
     Expired = 3,
 }
 
-/// Account information structure
 #[derive(Clone)]
 #[contracttype]
 pub struct AccountInfo {
@@ -33,7 +31,6 @@ pub struct AccountInfo {
     pub swept_to: Option<Address>,
 }
 
-/// Request to initialize a single ephemeral account
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct AccountInitRequest {
@@ -41,11 +38,46 @@ pub struct AccountInitRequest {
     pub recovery_address: Address,
 }
 
-/// Result of initializing an ephemeral account
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct AccountInitResult {
     pub account_address: Address,
     pub success: bool,
     pub error: Option<Bytes>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SweepPayload {
+    pub ephemeral_account: Address,
+    pub destination: Address,
+    pub nonce: u64,
+    pub network_passphrase: Bytes,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AssetBalance {
+    pub asset: Address,
+    pub balance: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractVersion {
+    pub major: u32,
+    pub minor: u32,
+    pub patch: u32,
+}
+
+impl ContractVersion {
+    pub fn packed(&self) -> u32 {
+        ((self.major & 0xFF) << 16) | ((self.minor & 0xFF) << 8) | (self.patch & 0xFF)
+    }
+    pub fn new(major: u32, minor: u32, patch: u32) -> Self {
+        Self { major, minor, patch }
+    }
+    pub fn initial() -> Self {
+        Self::new(1, 0, 0)
+    }
 }

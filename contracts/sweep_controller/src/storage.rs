@@ -12,6 +12,8 @@ pub enum DataKey {
     AuthorizedDestination,
     /// Creator address (the address that initialized the contract)
     Creator,
+    /// Storage schema version for migrations
+    StorageVersion,
 }
 
 /// Set the authorized signer public key

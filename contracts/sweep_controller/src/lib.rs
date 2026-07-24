@@ -2,6 +2,7 @@
 
 mod authorization;
 mod errors;
+mod migration;
 mod storage;
 mod transfers;
 
@@ -63,7 +64,29 @@ impl SweepController {
             emit_destination_authorized(&env, destination);
         }
 
+        // Run any pending storage migrations
+        migration::migrate(&env);
+
         Ok(())
+    }
+
+    /// Run pending storage migrations.  Callable by anyone — migrations
+    /// are idempotent and safe to call repeatedly.
+    ///
+    /// # Returns
+    /// `(old_version_packed, new_version_packed)` or `(0, 0)` if no migration was needed.
+    pub fn migrate(env: Env) -> (u32, u32) {
+        match migration::migrate(&env) {
+            Some((old, new)) => (old.packed(), new.packed()),
+            None => (0, 0),
+        }
+    }
+
+    /// Return the current storage schema version as a packed u32.
+    pub fn get_version(env: Env) -> u32 {
+        migration::get_storage_version(&env)
+            .unwrap_or(migration::CURRENT_VERSION)
+            .packed()
     }
 
     /// Execute sweep operation from ephemeral account to destination
