@@ -247,11 +247,9 @@ impl SweepController {
 
         let account_client = EphemeralAccountClient::new(&env, &ephemeral_account);
 
-        // Check if account exists and has payment
         let info = account_client.get_info();
 
-        info.payment_received
-            && info.status as u32 == AccountStatus::PaymentReceived as u32
+        info.status as u32 == AccountStatus::PaymentReceived as u32
             && !account_client.is_expired()
     }
 
