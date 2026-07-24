@@ -61,11 +61,24 @@ fn setup_ready_account(
             invoke: &soroban_sdk::testutils::MockAuthInvoke {
                 contract: &ephemeral_id,
                 fn_name: "initialize",
-                args: (&account_creator, &expiry, &recovery, &controller_id, &account_creator).into_val(env),
+                args: (
+                    &account_creator,
+                    &expiry,
+                    &recovery,
+                    &controller_id,
+                    &account_creator,
+                )
+                    .into_val(env),
                 sub_invokes: &[],
             },
         }])
-        .initialize(&account_creator, &expiry, &recovery, &controller_id, &account_creator);
+        .initialize(
+            &account_creator,
+            &expiry,
+            &recovery,
+            &controller_id,
+            &account_creator,
+        );
 
     let asset_id = Address::generate(&env);
     env.mock_all_auths_allowing_non_root_auth();
@@ -158,7 +171,13 @@ fn test_sweep_without_payment() {
     let account_creator = Address::generate(&env);
     let recovery = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1_000;
-    ephemeral_client.initialize(&account_creator, &expiry, &recovery, &controller_id, &account_creator);
+    ephemeral_client.initialize(
+        &account_creator,
+        &expiry,
+        &recovery,
+        &controller_id,
+        &account_creator,
+    );
 
     let asset_id = Address::generate(&env);
     ephemeral_client.record_payment(&100, &asset_id);
@@ -326,11 +345,24 @@ fn test_initialize_with_authorized_destination() {
             invoke: &soroban_sdk::testutils::MockAuthInvoke {
                 contract: &ephemeral_id,
                 fn_name: "initialize",
-                args: (&account_creator, &expiry, &recovery, &controller_id, &account_creator).into_val(&env),
+                args: (
+                    &account_creator,
+                    &expiry,
+                    &recovery,
+                    &controller_id,
+                    &account_creator,
+                )
+                    .into_val(&env),
                 sub_invokes: &[],
             },
         }])
-        .initialize(&account_creator, &expiry, &recovery, &controller_id, &account_creator);
+        .initialize(
+            &account_creator,
+            &expiry,
+            &recovery,
+            &controller_id,
+            &account_creator,
+        );
 
     let asset_id = Address::generate(&env);
     env.mock_all_auths_allowing_non_root_auth();
