@@ -259,6 +259,22 @@ impl SweepController {
         storage::get_sweep_nonce(&env)
     }
 
+    /// Query the base reserve lifecycle state of an ephemeral account.
+    ///
+    /// Returns `(remaining, available, reclaimed)` where:
+    /// - `remaining`: total base reserve still unreclaimed (stroops)
+    /// - `available`: portion available for immediate transfer
+    /// - `reclaimed`: whether the reserve has been fully reclaimed
+    ///
+    /// This is a read-only view — makes no state changes.
+    pub fn get_reserve_info(env: Env, ephemeral_account: Address) -> (i128, i128, bool) {
+        let account_client = EphemeralAccountClient::new(&env, &ephemeral_account);
+        let remaining = account_client.get_reserve_remaining();
+        let available = account_client.get_reserve_available();
+        let reclaimed = account_client.is_reserve_reclaimed();
+        (remaining, available, reclaimed)
+    }
+
     /// Update the authorized destination address
     ///
     /// This function allows the creator to update the authorized destination before any sweep occurs.
