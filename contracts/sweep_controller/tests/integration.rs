@@ -374,6 +374,24 @@ fn test_initialize_with_authorized_destination() {
     assert!(result.is_err());
 }
 
+// ── Issue #175: Test second sweep rejected after successful claim ──
+
+#[test]
+fn test_second_sweep_rejected_after_successful_claim() {
+    let env = Env::default();
+
+    let (controller_client, _ephemeral_client, ephemeral_id) = setup_ready_account(&env, None);
+
+    let recipient = Address::generate(&env);
+
+    // First claim succeeds (Soroban auth path)
+    env.mock_all_auths();
+    controller_client.claim(&recipient, &ephemeral_id);
+
+    // Second claim must be rejected — account is already Swept
+    let result = controller_client.try_claim(&recipient, &ephemeral_id);
+    assert!(result.is_err());
+}
 // ──────────────────────────────────────────────────────────────────────────────
 // Full Integration Test Suite — Issue #165
 // Issue #160: Full integration test suite — EphemeralAccount + SweepController
