@@ -49,6 +49,15 @@ Bridgelet Core uses a layered authorization model:
     4.  `SweepController` calls `EphemeralAccount.sweep`.
     5.  `EphemeralAccount` validates its internal state and transitions to `Swept`.
 
+### 2a. Claim Operations
+*   **Mechanism**: Soroban Auth (dual authorization)
+*   **Flow**:
+    1.  Caller invokes `SweepController.claim` with `recipient` and `ephemeral_account`.
+    2.  `recipient.require_auth()` ensures the recipient authorizes the claim.
+    3.  `SweepController` builds a Soroban auth entry authorizing itself as the invoker of `sweep_claim` on the ephemeral account (`authorize_as_current_contract`).
+    4.  `EphemeralAccount.sweep_claim` is called, which verifies the Soroban auth entries and transitions the account to `Swept`.
+*   **Note**: This path does not use Ed25519 signatures. Instead, both the recipient and the controller contract must provide Soroban authorization, enabling a relayer/SDK to submit the transaction while the recipient only signs the authorization payload.
+
 ### 3. Expiration
 *   **Mechanism**: Public (Permissionless)
 *   **Scope**: Once the expiry ledger is reached, *anyone* can call `expire()` to return funds to the recovery address. This ensures funds are never stuck due to a missing signer.
@@ -71,7 +80,7 @@ The system employs the Checks-Effects-Interactions pattern and leverages Soroban
 
 ### Critical Implementation Gaps (Current Version)
 1.  **EphemeralAccount Signature Verification**: The `verify_sweep_authorization` function in `EphemeralAccount` is currently a placeholder ("TODO"). **Do not rely on `EphemeralAccount::sweep` directly for security.** Always route sweeps through `SweepController`, which implements proper Ed25519 verification.
-2.  **Token Transfers**: The actual logic to move tokens (calling `token.transfer`) is currently **commented out** or not fully integrated in `SweepController`. The contracts currently manage *state* and *authorization* but do not yet move funds.
+2.  **Token Transfers**: `SweepController` invokes `transfers::execute_transfers` to move tokens from the ephemeral account to the destination after a successful sweep. The transfer logic is fully integrated and active.
 
 ### Other Limitations
 *   **Asset Limit**: The `EphemeralAccount` supports recording up to 10 distinct assets.

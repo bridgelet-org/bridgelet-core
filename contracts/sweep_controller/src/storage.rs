@@ -1,5 +1,14 @@
 use soroban_sdk::{contracttype, Address, BytesN, Env};
 
+const INSTANCE_TTL_THRESHOLD: u32 = 100;
+const INSTANCE_TTL_EXTEND_TO: u32 = 518_400;
+
+pub fn extend_instance_ttl(env: &Env) {
+    env.storage()
+        .instance()
+        .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND_TO);
+}
+
 /// Data keys for contract storage
 #[contracttype]
 #[derive(Clone)]
