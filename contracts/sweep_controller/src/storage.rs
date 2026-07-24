@@ -12,6 +12,10 @@ pub enum DataKey {
     AuthorizedDestination,
     /// Creator address (the address that initialized the contract)
     Creator,
+    /// Pending new signer public key (set by update_authorized_signer, takes effect after time-lock)
+    PendingSigner,
+    /// Ledger sequence at which the pending signer becomes effective
+    PendingSignerEffectiveLedger,
 }
 
 /// Set the authorized signer public key
@@ -124,4 +128,40 @@ pub fn set_creator(env: &Env, creator: &Address) {
 /// The creator address, or None if not set
 pub fn get_creator(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::Creator)
+}
+
+/// Set the pending new signer public key (for time-locked signer rotation)
+pub fn set_pending_signer(env: &Env, signer: &BytesN<32>) {
+    env.storage()
+        .instance()
+        .set(&DataKey::PendingSigner, signer);
+}
+
+/// Get the pending new signer public key
+pub fn get_pending_signer(env: &Env) -> Option<BytesN<32>> {
+    env.storage().instance().get(&DataKey::PendingSigner)
+}
+
+/// Set the ledger at which the pending signer becomes effective
+pub fn set_pending_signer_effective_ledger(env: &Env, ledger: u32) {
+    env.storage()
+        .instance()
+        .set(&DataKey::PendingSignerEffectiveLedger, &ledger);
+}
+
+/// Get the ledger at which the pending signer becomes effective
+pub fn get_pending_signer_effective_ledger(env: &Env) -> Option<u32> {
+    env.storage()
+        .instance()
+        .get(&DataKey::PendingSignerEffectiveLedger)
+}
+
+/// Clear pending signer state (call after applying the new signer)
+pub fn clear_pending_signer(env: &Env) {
+    env.storage()
+        .instance()
+        .remove(&DataKey::PendingSigner);
+    env.storage()
+        .instance()
+        .remove(&DataKey::PendingSignerEffectiveLedger);
 }
