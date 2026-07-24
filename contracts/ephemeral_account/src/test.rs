@@ -973,6 +973,36 @@ mod test {
         assert_eq!(payments.len(), 0);
     }
 
+    // ── Issue #176: min_amount enforcement ──────────────────────────────────
+
+    #[test]
+    fn test_record_payment_at_zero_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(
+            &creator,
+            &expiry_ledger,
+            &recovery,
+            &controller,
+            &Address::generate(&env),
+        );
+
+        let result = client.try_record_payment(&0, &asset);
+        assert!(matches!(result, Err(Ok(Error::InvalidAmount))));
+    }
+
+    #[test]
+    fn test_record_payment_below_min_rejected() {
     #[test]
     fn test_recovery_sweep_full_lifecycle() {
         use crate::events::AccountExpired;
@@ -986,13 +1016,72 @@ mod test {
 
         let creator = Address::generate(&env);
         let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
         let asset = Address::generate(&env);
-        let expiry_ledger = env.ledger().sequence() + 1;
+        let expiry_ledger = env.ledger().sequence() + 1000;
 
         client.initialize(
             &creator,
             &expiry_ledger,
             &recovery,
+            &controller,
+            &Address::generate(&env),
+        );
+
+        let result = client.try_record_payment(&0, &asset);
+        assert!(matches!(result, Err(Ok(Error::InvalidAmount))));
+    }
+
+    #[test]
+    fn test_record_payment_negative_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(
+            &creator,
+            &expiry_ledger,
+            &recovery,
+            &controller,
+            &Address::generate(&env),
+        );
+
+        let result = client.try_record_payment(&-1, &asset);
+        assert!(matches!(result, Err(Ok(Error::InvalidAmount))));
+    }
+
+    #[test]
+    fn test_record_payment_at_min_accepted() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(
+            &creator,
+            &expiry_ledger,
+            &recovery,
+            &controller,
+            &Address::generate(&env),
+        );
+
+        let result = client.try_record_payment(&1, &asset);
+        assert!(matches!(result, Ok(Ok(()))));
             &Address::generate(&env),
             &Address::generate(&env),
         );
