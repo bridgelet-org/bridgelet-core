@@ -79,7 +79,7 @@ mod test {
 
     /// Double initialization must fail with error #4 (AlreadyInitialized).
     #[test]
-    #[should_panic(expected = "Error(Contract, #4)")]
+    #[should_panic(expected = "Error(Contract, #3003)")]
     fn test_initialize_twice_panics() {
         let (env, client, _admin, _) = setup();
         let another = Address::generate(&env);
@@ -91,7 +91,7 @@ mod test {
     /// set_base_reserve must fail with error #5 (NotInitialized) on a fresh
     /// contract that was never initialized.
     #[test]
-    #[should_panic(expected = "Error(Contract, #5)")]
+    #[should_panic(expected = "Error(Contract, #3004)")]
     fn test_set_base_reserve_before_initialize_panics() {
         let (_env, client, _) = setup_uninitialized();
         client.set_base_reserve(&1_000_000_000i128);
@@ -117,7 +117,7 @@ mod test {
 
     /// require_base_reserve() must panic (contract error #2) when not set.
     #[test]
-    #[should_panic(expected = "Error(Contract, #2)")]
+    #[should_panic(expected = "Error(Contract, #3001)")]
     fn test_require_base_reserve_panics_when_not_set() {
         let (_env, client, _) = setup_uninitialized();
         client.require_base_reserve();
@@ -170,7 +170,7 @@ mod test {
 
     /// Zero is not a valid reserve; the contract must reject it with error #1.
     #[test]
-    #[should_panic(expected = "Error(Contract, #1)")]
+    #[should_panic(expected = "Error(Contract, #3000)")]
     fn test_set_base_reserve_zero_is_rejected() {
         let (_env, client, _admin, _) = setup();
         client.set_base_reserve(&0i128);
@@ -178,7 +178,7 @@ mod test {
 
     /// Negative amounts are nonsensical and must be rejected with error #1.
     #[test]
-    #[should_panic(expected = "Error(Contract, #1)")]
+    #[should_panic(expected = "Error(Contract, #3000)")]
     fn test_set_base_reserve_negative_is_rejected() {
         let (_env, client, _admin, _) = setup();
         client.set_base_reserve(&-1i128);
@@ -186,7 +186,7 @@ mod test {
 
     /// A large negative amount (i128::MIN) must also be rejected.
     #[test]
-    #[should_panic(expected = "Error(Contract, #1)")]
+    #[should_panic(expected = "Error(Contract, #3000)")]
     fn test_set_base_reserve_min_i128_is_rejected() {
         let (_env, client, _admin, _) = setup();
         client.set_base_reserve(&i128::MIN);
@@ -207,7 +207,7 @@ mod test {
 
     /// One stroop above the ceiling must be rejected with error #6.
     #[test]
-    #[should_panic(expected = "Error(Contract, #6)")]
+    #[should_panic(expected = "Error(Contract, #3005)")]
     fn test_set_base_reserve_above_max_is_rejected() {
         let (_env, client, _admin, _) = setup();
         client.set_base_reserve(&100_000_000_001i128);
@@ -215,7 +215,7 @@ mod test {
 
     /// An absurdly large value must be rejected with error #6.
     #[test]
-    #[should_panic(expected = "Error(Contract, #6)")]
+    #[should_panic(expected = "Error(Contract, #3005)")]
     fn test_set_base_reserve_huge_value_is_rejected() {
         let (_env, client, _admin, _) = setup();
         client.set_base_reserve(&i128::MAX);
