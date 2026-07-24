@@ -20,7 +20,7 @@ use soroban_sdk::{
 };
 
 proptest! {
-    #![proptest_config(ProptestConfig { cases: 48, ..ProptestConfig::default() })]
+    #![proptest_config(ProptestConfig { cases: 48, failure_persistence: None, ..ProptestConfig::default() })]
 
     // Invariant 1: the tracked reserve never goes negative after a sweep, for
     // any set of valid positive payment amounts (1..=10 assets).
@@ -65,7 +65,8 @@ proptest! {
     // rejected with Error::AccountExpired.
     #[test]
     fn expired_account_always_rejects_sweep(
-        advance in 0u32..=10_000u32,
+        expiry_offset in 1u32..=50u32,
+        past in 0u32..=50u32,
         amount in 1i128..=1_000_000_000_000i128,
     ) {
         let env = Env::default();
@@ -79,7 +80,9 @@ proptest! {
         let controller = Address::generate(&env);
         let asset = Address::generate(&env);
         let destination = Address::generate(&env);
-        let expiry_ledger = env.ledger().sequence() + 1;
+
+        let start = env.ledger().sequence();
+        let expiry_ledger = start + expiry_offset;
 
         client.initialize(
             &creator,
@@ -90,8 +93,9 @@ proptest! {
         );
         client.record_payment(&amount, &asset);
 
-        // Move the ledger to at-or-after the expiry point.
-        env.ledger().set_sequence_number(expiry_ledger + advance);
+        // Move to at-or-after expiry. The advance is kept small so the contract
+        // instance stays within its TTL and is not archived by the test host.
+        env.ledger().set_sequence_number(expiry_ledger + past);
 
         let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
         let result = client.try_sweep(&destination, &auth_sig);
