@@ -86,6 +86,10 @@ impl EphemeralAccountContract {
             return Err(Error::NotInitialized);
         }
 
+        // Only the authorized controller may record payments
+        let controller = storage::get_authorized_controller(&env).ok_or(Error::Unauthorized)?;
+        controller.require_auth();
+
         // Validate amount
         if amount <= 0 {
             return Err(Error::InvalidAmount);
