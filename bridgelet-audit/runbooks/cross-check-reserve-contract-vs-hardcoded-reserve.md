@@ -116,9 +116,9 @@ at that revision.
 
 | Scenario | Interpretation | Action |
 |----------|---------------|--------|
-| `ReserveContract` value equals `BASE_RESERVE_STROOPS` | ✅ Values are consistent. No action required. | Record the check in your audit log. |
-| `ReserveContract` value differs from `BASE_RESERVE_STROOPS` | ⚠️ Values are out of sync. | See remediation guidance below. |
-| `ReserveContract` returns `None` | ⚠️ Reference contract is unconfigured. | Initialize it via `set_base_reserve`. |
+| `ReserveContract` value equals `BASE_RESERVE_STROOPS` | [OK] Values are consistent. No action required. | Record the check in your audit log. |
+| `ReserveContract` value differs from `BASE_RESERVE_STROOPS` | [WARN] Values are out of sync. | See remediation guidance below. |
+| `ReserveContract` returns `None` | [WARN] Reference contract is unconfigured. | Initialize it via `set_base_reserve`. |
 
 ---
 
