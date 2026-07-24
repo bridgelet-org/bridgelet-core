@@ -376,6 +376,7 @@ fn test_initialize_with_authorized_destination() {
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Full Integration Test Suite — Issue #165
+// Issue #160: Full integration test suite — EphemeralAccount + SweepController
 // ──────────────────────────────────────────────────────────────────────────────
 
 /// Helper: deploy both contracts and return clients + IDs.
@@ -839,6 +840,18 @@ fn test_can_sweep_reflects_account_state() {
     assert!(controller_client.can_sweep(&ephemeral_id));
 
     let recipient = Address::generate(&env);
+    // No payment yet — can_sweep should be false
+    assert!(!controller_client.can_sweep(&ephemeral_id));
+
+    // Record payment
+    ephemeral_client.record_payment(&100, &Address::generate(&env));
+
+    // Has payment and active — can_sweep should be true
+    assert!(controller_client.can_sweep(&ephemeral_id));
+
+    // Claim via locked destination
+    let recipient = Address::generate(&env);
+    // Re-deploy controller with matching destination
     let controller_id2 = env.register(SweepController, ());
     let controller_client2 = SweepControllerClient::new(&env, &controller_id2);
     let (authorized_signer2, _) = generate_test_keypair(&env);

@@ -127,16 +127,36 @@ impl EphemeralAccountContract {
         Ok(())
     }
 
-    /// Execute sweep to destination wallet
-    /// Transfers all funds from all assets to the specified destination atomically
+    /// Execute sweep to destination wallet via Ed25519 signature path.
+    ///
+    /// This is the **off-chain signer** sweep path: the caller passes an
+    /// `auth_signature` that was produced off-chain by the `authorized_signer`.
+    /// Authorization is verified against the stored Ed25519 public key.
+    ///
+    /// **Do not call directly** — always route through
+    /// `SweepController::execute_sweep`, which handles signature verification,
+    /// nonce management, and token transfers.
     ///
     /// # Arguments
     /// * `destination` - Recipient wallet address
-    /// * `auth_signature` - Authorization signature from off-chain system
+    /// * `auth_signature` - Ed25519 signature from the authorized off-chain signer
     ///
     /// # Errors
-    /// Returns Error::Unauthorized if authorization fails
-    /// Returns Error::AlreadySwept if sweep already executed
+    /// * `Error::NotInitialized` — contract not yet initialized
+    /// * `Error::AlreadySwept` — account already swept
+    /// * `Error::NoPaymentReceived` — no payment recorded yet
+    /// * `Error::AccountExpired` — past expiry ledger
+    /// * `Error::Unauthorized` — caller is not the authorized controller
+    ///
+    /// # Authorization Flow
+    /// 1. Off-chain: signer signs `hash(destination + nonce + contract_id)`
+    /// 2. Caller invokes `SweepController.execute_sweep(destination, signature)`
+    /// 3. `SweepController` verifies the Ed25519 signature and increments nonce
+    /// 4. `SweepController` calls this function via `authorize_ephemeral_sweep`
+    /// 5. This function validates state, transitions to `Swept`, and reclaims reserve
+    ///
+    /// See also: [`sweep_claim`] for the Soroban-auth claim path used by
+    /// `SweepController::claim`.
     pub fn sweep(env: Env, destination: Address, auth_signature: BytesN<64>) -> Result<(), Error> {
         // Check initialized
         if !storage::is_initialized(&env) {
@@ -188,17 +208,35 @@ impl EphemeralAccountContract {
         Ok(())
     }
 
-    /// Sweep initiated by a direct claim — no off-chain signature required.
-    /// Authorization is enforced entirely by requiring the sweep controller
-    /// as the invoker. Used by SweepController.claim() where the recipient
-    /// has already proven ownership via Soroban auth on the outer transaction.
+    /// Sweep initiated by a direct claim — **no off-chain signature required**.
+    ///
+    /// This is the **Soroban-auth claim** path: authorization is enforced
+    /// entirely by requiring the sweep controller as the invoker via Soroban
+    /// auth. Used by `SweepController::claim()` where the recipient has already
+    /// proven ownership via the Soroban auth entry on the outer transaction.
+    ///
+    /// **Do not call directly** — always route through
+    /// `SweepController::claim`, which handles destination validation, nonce
+    /// management, and event emission.
+    ///
+    /// # Arguments
+    /// * `destination` - Recipient wallet address (must match locked destination if set)
     ///
     /// # Errors
-    /// Returns Error::NotInitialized if contract not initialized
-    /// Returns Error::AlreadySwept if sweep already executed
-    /// Returns Error::NoPaymentReceived if no payment has been recorded
-    /// Returns Error::AccountExpired if past expiry ledger
-    /// Returns Error::Unauthorized if caller is not the authorized controller
+    /// * `Error::NotInitialized` — contract not yet initialized
+    /// * `Error::AlreadySwept` — account already swept
+    /// * `Error::NoPaymentReceived` — no payment recorded yet
+    /// * `Error::AccountExpired` — past expiry ledger
+    /// * `Error::Unauthorized` — caller is not the authorized controller
+    ///
+    /// # Authorization Flow
+    /// 1. Recipient signs a Soroban auth entry for `SweepController::claim`
+    /// 2. Caller (or relayer) invokes `SweepController::claim(recipient, ephemeral_account)`
+    /// 3. `SweepController` validates destination, authorizes as invoker of `sweep_claim`
+    /// 4. This function validates state, transitions to `Swept`, and reclaims reserve
+    ///
+    /// See also: [`sweep`] for the Ed25519 signature path used by
+    /// `SweepController::execute_sweep`.
     pub fn sweep_claim(env: Env, destination: Address) -> Result<(), Error> {
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
