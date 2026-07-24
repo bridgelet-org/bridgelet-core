@@ -1,4 +1,3 @@
-use crate::errors::Error;
 use bridgelet_shared::Payment;
 use soroban_sdk::token::TokenClient;
 use soroban_sdk::{Address, Env, Vec};
@@ -12,23 +11,22 @@ use soroban_sdk::{Address, Env, Vec};
 /// on its behalf — this is enforced by the Soroban auth model when `from.require_auth()`
 /// is satisfied by the ephemeral account's invocation context.
 ///
+/// Note: Soroban's SEP-41 `transfer()` traps on failure, so individual
+/// transfer errors cannot be recovered — the entire transaction rolls back.
+///
 /// # Arguments
 /// * `env` - Soroban environment
 /// * `from` - Ephemeral account address (source of funds)
 /// * `destination` - Recipient wallet address
 /// * `payments` - All recorded payments to transfer
-///
-/// # Errors
-/// Returns `Error::TransferFailed` if any individual transfer fails
 pub fn execute_transfers(
     env: &Env,
     from: &Address,
     destination: &Address,
     payments: &Vec<Payment>,
-) -> Result<(), Error> {
+) {
     for payment in payments.iter() {
         let token = TokenClient::new(env, &payment.asset);
         token.transfer(from, destination, &payment.amount);
     }
-    Ok(())
 }

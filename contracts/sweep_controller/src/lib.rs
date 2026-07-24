@@ -14,7 +14,7 @@ use ephemeral_account_contract::Client as EphemeralAccountClient;
 
 use soroban_sdk::{
     auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
-    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, IntoVal, Vec,
+    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, IntoVal, Symbol, Vec,
 };
 
 use authorization::AuthContext;
@@ -76,7 +76,7 @@ impl SweepController {
     /// # Errors
     /// Returns Error::AuthorizationFailed if signature is invalid
     /// Returns Error::InvalidAccount if account is not in valid state
-    /// Returns Error::TransferFailed if token transfer fails
+    /// Returns Error::AccountNotReady if account state is invalid
     /// Returns Error::UnauthorizedDestination if destination doesn't match authorized destination (when set)
     pub fn execute_sweep(
         env: Env,
@@ -200,8 +200,7 @@ impl SweepController {
             });
         }
 
-        transfers::execute_transfers(env, &ephemeral_account, &destination, &payments_vec)
-            .map_err(|_| Error::TransferFailed)?;
+        transfers::execute_transfers(env, &ephemeral_account, &destination, &payments_vec);
 
         // Emit sweep completed event after successful transfer.
         emit_sweep_completed(env, ephemeral_account, destination, amount);
@@ -219,7 +218,7 @@ impl SweepController {
         let args = (recipient.clone(),).into_val(env);
         let context = ContractContext {
             contract: ephemeral_account.clone(),
-            fn_name: symbol_short!("swp_claim"), // symbol_short! max 9 chars — abbreviated
+            fn_name: Symbol::new(env, "sweep_claim"),
             args,
         };
         let auth_entries = Vec::from_array(
