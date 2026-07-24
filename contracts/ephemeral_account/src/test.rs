@@ -403,6 +403,17 @@ mod test {
     fn test_error_variants_have_expected_numeric_codes() {
         assert_eq!(Error::AlreadyInitialized as u32, 1);
         assert_eq!(Error::NotInitialized as u32, 2);
+        assert_eq!(Error::InvalidAmount as u32, 3);
+        assert_eq!(Error::InvalidExpiry as u32, 4);
+        assert_eq!(Error::NotExpired as u32, 5);
+        assert_eq!(Error::AlreadySwept as u32, 6);
+        assert_eq!(Error::Unauthorized as u32, 7);
+        assert_eq!(Error::NoPaymentReceived as u32, 8);
+        assert_eq!(Error::AccountExpired as u32, 9);
+        assert_eq!(Error::InvalidStatus as u32, 10);
+        assert_eq!(Error::DuplicateAsset as u32, 11);
+        assert_eq!(Error::TooManyPayments as u32, 12);
+        assert_eq!(Error::NotUpgradeAdmin as u32, 13);
         assert_eq!(Error::PaymentAlreadyReceived as u32, 3);
         assert_eq!(Error::InvalidAmount as u32, 4);
         assert_eq!(Error::InvalidExpiry as u32, 5);
@@ -636,7 +647,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #13)")]
+    #[should_panic(expected = "Error(Contract, #11)")]
     fn test_double_payment_for_same_asset_is_rejected() {
         let env = Env::default();
         env.mock_all_auths();
@@ -661,7 +672,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #11)")]
+    #[should_panic(expected = "Error(Contract, #9)")]
     fn test_sweep_after_expiry_is_rejected() {
         let env = Env::default();
         env.mock_all_auths();
