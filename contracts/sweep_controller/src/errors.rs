@@ -10,8 +10,6 @@ pub enum Error {
     AccountNotReady = 5,
     AccountExpired = 6,
     AccountAlreadySwept = 7,
-    InvalidSignature = 8,
-    SignatureVerificationFailed = 9,
     AuthorizedSignerNotSet = 10,
     InvalidNonce = 11,
     // discriminant 12 intentionally unused
