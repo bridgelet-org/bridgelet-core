@@ -20,6 +20,7 @@ jobs:
         toolchain: 1.89.0
         target: wasm32v1-none
         override: true
+        components: rustfmt, clippy
 
     - name: Install soroban-cli
       run: cargo install --locked soroban-cli --version 22.0.0
