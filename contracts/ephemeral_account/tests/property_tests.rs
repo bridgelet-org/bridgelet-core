@@ -45,6 +45,7 @@ proptest! {
             &expiry_ledger,
             &recovery,
             &controller,
+            &BytesN::from_array(&env, &[0u8; 32]),
             &Address::generate(&env),
         );
 
@@ -53,8 +54,7 @@ proptest! {
             client.record_payment(amount, &asset);
         }
 
-        let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
-        client.sweep(&destination, &auth_sig);
+        client.sweep_claim(&destination);
 
         prop_assert_eq!(client.get_status(), AccountStatus::Swept);
         prop_assert!(client.get_reserve_remaining() >= 0);
@@ -89,6 +89,7 @@ proptest! {
             &expiry_ledger,
             &recovery,
             &controller,
+            &BytesN::from_array(&env, &[0u8; 32]),
             &Address::generate(&env),
         );
         client.record_payment(&amount, &asset);
@@ -122,6 +123,7 @@ proptest! {
             &expiry_ledger,
             &recovery,
             &Address::generate(&env),
+            &BytesN::from_array(&env, &[0u8; 32]),
             &Address::generate(&env),
         );
 
@@ -130,6 +132,7 @@ proptest! {
             &(expiry_ledger + 1),
             &recovery,
             &Address::generate(&env),
+            &BytesN::from_array(&env, &[0u8; 32]),
             &Address::generate(&env),
         );
 

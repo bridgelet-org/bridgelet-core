@@ -66,6 +66,7 @@ fn setup_ready_account(
                     &expiry,
                     &recovery,
                     &controller_id,
+                    &BytesN::from_array(&env, &[0u8; 32]),
                     &account_creator,
                 )
                     .into_val(env),
@@ -77,6 +78,7 @@ fn setup_ready_account(
             &expiry,
             &recovery,
             &controller_id,
+            &BytesN::from_array(&env, &[0u8; 32]),
             &account_creator,
         );
 
@@ -138,7 +140,7 @@ fn test_execute_sweep_with_valid_signature() {
     let expiry = env.ledger().sequence() + 1000;
 
     // Initialize ephemeral account, authorizing this SweepController to call sweep()
-    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &creator);
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &BytesN::from_array(&env, &[0u8; 32]), &creator);
 
     // Create an invalid signature (all zeros - different from valid signature)
     let invalid_sig = BytesN::from_array(&env, &[0u8; 64]);
@@ -176,6 +178,7 @@ fn test_sweep_without_payment() {
         &expiry,
         &recovery,
         &controller_id,
+        &BytesN::from_array(&env, &[0u8; 32]),
         &account_creator,
     );
 
@@ -291,7 +294,7 @@ fn test_unauthorized_signer_not_set() {
     let expiry = env.ledger().sequence() + 1000;
 
     // Initialize ephemeral account, authorizing this SweepController to call sweep()
-    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &creator);
+    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &BytesN::from_array(&env, &[0u8; 32]), &creator);
 
     // Record payment
     ephemeral_client.record_payment(&100, &asset);
@@ -350,6 +353,7 @@ fn test_initialize_with_authorized_destination() {
                     &expiry,
                     &recovery,
                     &controller_id,
+                    &BytesN::from_array(&env, &[0u8; 32]),
                     &account_creator,
                 )
                     .into_val(&env),
@@ -361,6 +365,7 @@ fn test_initialize_with_authorized_destination() {
             &expiry,
             &recovery,
             &controller_id,
+            &BytesN::from_array(&env, &[0u8; 32]),
             &account_creator,
         );
 
