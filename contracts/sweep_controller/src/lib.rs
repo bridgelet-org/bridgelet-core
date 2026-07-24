@@ -21,6 +21,10 @@ use authorization::AuthContext;
 use bridgelet_shared::{AccountStatus, Payment};
 pub use errors::Error;
 
+/// Expected network passphrase for this deployment.
+/// Change to `PUBLIC_NETWORK_PASSPHRASE` for mainnet.
+const EXPECTED_PASSPHRASE: &str = bridgelet_shared::passphrase::STANDALONE_PASSPHRASE;
+
 #[contract]
 pub struct SweepController;
 
@@ -48,6 +52,10 @@ impl SweepController {
 
         // Require the creator to authorize this initialization
         creator.require_auth();
+
+        // Enforce deploy-time network passphrase to prevent accidental testnet→mainnet deployment
+        bridgelet_shared::passphrase::require_network(&env, EXPECTED_PASSPHRASE)
+            .map_err(|_| Error::AuthorizationFailed)?;
 
         storage::set_creator(&env, &creator);
 

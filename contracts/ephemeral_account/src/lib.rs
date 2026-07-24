@@ -16,6 +16,10 @@ pub use events::{
 };
 pub use storage::DataKey;
 
+/// Expected network passphrase for this deployment.
+/// Change to `PUBLIC_NETWORK_PASSPHRASE` for mainnet.
+const EXPECTED_PASSPHRASE: &str = bridgelet_shared::passphrase::STANDALONE_PASSPHRASE;
+
 const BASE_RESERVE_STROOPS: i128 = 1_000_000_000;
 
 #[contract]
@@ -47,6 +51,10 @@ impl EphemeralAccountContract {
 
         // Verify creator authorization
         creator.require_auth();
+
+        // Enforce deploy-time network passphrase to prevent accidental testnet→mainnet deployment
+        bridgelet_shared::passphrase::require_network(&env, EXPECTED_PASSPHRASE)
+            .map_err(|_| Error::Unauthorized)?;
 
         // Validate expiry is in future
         let current_ledger = env.ledger().sequence();
