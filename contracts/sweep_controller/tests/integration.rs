@@ -833,20 +833,11 @@ fn test_can_sweep_reflects_account_state() {
         &account_creator,
     );
 
+    // Active with no payment → can_sweep should be false
     assert!(!controller_client.can_sweep(&ephemeral_id));
 
+    // PaymentReceived → can_sweep should be true
     ephemeral_client.record_payment(&100, &Address::generate(&env));
-
-    assert!(controller_client.can_sweep(&ephemeral_id));
-
-    let recipient = Address::generate(&env);
-    // No payment yet — can_sweep should be false
-    assert!(!controller_client.can_sweep(&ephemeral_id));
-
-    // Record payment
-    ephemeral_client.record_payment(&100, &Address::generate(&env));
-
-    // Has payment and active — can_sweep should be true
     assert!(controller_client.can_sweep(&ephemeral_id));
 
     // Claim via locked destination
