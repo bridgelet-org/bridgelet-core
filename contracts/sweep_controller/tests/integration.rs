@@ -7,7 +7,7 @@ use soroban_sdk::{
     testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
     Address, BytesN, Env, IntoVal,
 };
-use sweep_controller::{Error, SweepController, SweepControllerClient};
+use sweep_controller::{SweepController, SweepControllerClient};
 
 fn generate_test_keypair(env: &Env) -> (BytesN<32>, BytesN<64>) {
     let public_key = BytesN::from_array(
@@ -371,5 +371,24 @@ fn test_initialize_with_authorized_destination() {
 
     let result = controller_client.try_claim(&recipient, &ephemeral_id);
 
+    assert!(result.is_err());
+}
+
+// ── Issue #175: Test second sweep rejected after successful claim ──
+
+#[test]
+fn test_second_sweep_rejected_after_successful_claim() {
+    let env = Env::default();
+
+    let (controller_client, _ephemeral_client, ephemeral_id) = setup_ready_account(&env, None);
+
+    let recipient = Address::generate(&env);
+
+    // First claim succeeds (Soroban auth path)
+    env.mock_all_auths();
+    controller_client.claim(&recipient, &ephemeral_id);
+
+    // Second claim must be rejected — account is already Swept
+    let result = controller_client.try_claim(&recipient, &ephemeral_id);
     assert!(result.is_err());
 }
