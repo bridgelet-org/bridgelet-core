@@ -287,20 +287,25 @@ fn get_reserve_reclaim_event_count(env: Env) -> u32
 
 | Code | Variant | Description |
 | :--- | :--- | :--- |
-| 1 | `AlreadyInitialized` | Contract already initialized. |
-| 2 | `NotInitialized` | Contract not initialized. |
-| 3 | `PaymentAlreadyReceived` | Deprecated. Use `DuplicateAsset` (code 13). |
-| 4 | `InvalidAmount` | Payment amount is zero or negative. |
-| 5 | `InvalidExpiry` | `expiry_ledger` is not in the future. |
-| 6 | `NotExpired` | Attempted to expire before `expiry_ledger`. |
-| 7 | `AlreadySwept` | Account already swept. |
-| 8 | `Unauthorized` | `authorized_controller` did not authorize the call. |
-| 9 | `InvalidSignature` | Cryptographic signature format is invalid. |
-| 10 | `NoPaymentReceived` | Cannot sweep without a recorded payment. |
-| 11 | `AccountExpired` | Cannot sweep an expired account. |
-| 12 | `InvalidStatus` | Action is invalid for the current account status. |
-| 13 | `DuplicateAsset` | Asset already has a recorded payment. |
-| 14 | `TooManyPayments` | Maximum of 10 distinct assets reached. |
+As of [Issue #248](https://github.com/bridgelet-org/bridgelet-core/issues/248), error codes are namespaced per contract in 1000-wide blocks so a bare numeric code is never ambiguous across contracts. This contract owns the 1000-1999 range.
+
+| Code | Variant | Description |
+| :--- | :--- | :--- |
+| 1000 | `AlreadyInitialized` | Contract already initialized. |
+| 1001 | `NotInitialized` | Contract not initialized. |
+| 1002 | `PaymentAlreadyReceived` | Deprecated. Use `DuplicateAsset` (code 1012). |
+| 1003 | `InvalidAmount` | Payment amount is zero or negative. |
+| 1004 | `InvalidExpiry` | `expiry_ledger` is not in the future. |
+| 1005 | `NotExpired` | Attempted to expire before `expiry_ledger`. |
+| 1006 | `AlreadySwept` | Account already swept. |
+| 1007 | `Unauthorized` | `authorized_controller` did not authorize the call. |
+| 1008 | `InvalidSignature` | Cryptographic signature format is invalid. |
+| 1009 | `NoPaymentReceived` | Cannot sweep without a recorded payment. |
+| 1010 | `AccountExpired` | Cannot sweep an expired account. |
+| 1011 | `InvalidStatus` | Action is invalid for the current account status. |
+| 1012 | `DuplicateAsset` | Asset already has a recorded payment. |
+| 1013 | `TooManyPayments` | Maximum of 10 distinct assets reached. |
+| 1014 | `NotUpgradeAdmin` | Caller is not authorized to perform contract upgrades. |
 
 ---
 
@@ -479,18 +484,22 @@ fn update_authorized_destination(env: Env, new_destination: Address) -> Result<(
 
 | Code | Variant | Description |
 | :--- | :--- | :--- |
-| 1 | `InvalidAccount` | Account is not in a valid state for the requested operation. |
-| 2 | `TransferFailed` | A SEP-41 token transfer failed. |
-| 3 | `AuthorizationFailed` | Signature invalid, caller not authorized, or already initialized. |
-| 4 | `InsufficientBalance` | Reserved for future use. |
-| 5 | `AccountNotReady` | Account has no payments or zero total amount. |
-| 6 | `AccountExpired` | Account has expired. |
-| 7 | `AccountAlreadySwept` | A sweep has already been executed; destination cannot be changed. |
-| 8 | `InvalidSignature` | Signature format is invalid. |
-| 9 | `SignatureVerificationFailed` | Ed25519 verification failure. |
-| 10 | `AuthorizedSignerNotSet` | Controller was not initialized with an authorized signer. |
-| 11 | `InvalidNonce` | Security nonce is invalid or out of sequence. |
-| 13 | `UnauthorizedDestination` | Destination does not match the locked `authorized_destination`. |
+Per [Issue #248](https://github.com/bridgelet-org/bridgelet-core/issues/248), this contract owns the 2000-2999 error code range. Code 2011 is intentionally unused, preserving a gap from the original enum.
+
+| Code | Variant | Description |
+| :--- | :--- | :--- |
+| 2000 | `InvalidAccount` | Account is not in a valid state for the requested operation. |
+| 2001 | `TransferFailed` | A SEP-41 token transfer failed. |
+| 2002 | `AuthorizationFailed` | Signature invalid, caller not authorized, or already initialized. |
+| 2003 | `InsufficientBalance` | Reserved for future use. |
+| 2004 | `AccountNotReady` | Account has no payments or zero total amount. |
+| 2005 | `AccountExpired` | Account has expired. |
+| 2006 | `AccountAlreadySwept` | A sweep has already been executed; destination cannot be changed. |
+| 2007 | `InvalidSignature` | Signature format is invalid. |
+| 2008 | `SignatureVerificationFailed` | Ed25519 verification failure. |
+| 2009 | `AuthorizedSignerNotSet` | Controller was not initialized with an authorized signer. |
+| 2010 | `InvalidNonce` | Security nonce is invalid or out of sequence. |
+| 2012 | `UnauthorizedDestination` | Destination does not match the locked `authorized_destination`. |
 
 ---
 
