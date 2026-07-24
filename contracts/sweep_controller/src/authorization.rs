@@ -4,24 +4,39 @@ use soroban_sdk::{xdr::ToXdr, Address, BytesN, Env};
 
 /// Construct the message to be signed for sweep authorization
 ///
-/// Message format: hash(destination + nonce + contract_id)
+/// Message format: hash(account + destination + nonce + contract_id)
+///
+/// Binding the ephemeral `account` into the signed message ensures a captured
+/// signature cannot be replayed against a different account, while the `nonce`
+/// prevents replay of the same authorization at a later time.
 ///
 /// # Arguments
 /// * `env` - Soroban environment
+/// * `account` - Ephemeral account the sweep authorizes
 /// * `destination` - Destination wallet address
 /// * `contract_id` - The sweep controller contract address
 ///
 /// # Returns
 /// BytesN<32> containing the hash of the message components
-fn construct_sweep_message(env: &Env, destination: &Address, contract_id: &Address) -> BytesN<32> {
+fn construct_sweep_message(
+    env: &Env,
+    account: &Address,
+    destination: &Address,
+    contract_id: &Address,
+) -> BytesN<32> {
     // Get current nonce
     let nonce = storage::get_sweep_nonce(env);
 
     // Construct the message by concatenating:
+    // - account (serialized as bytes)
     // - destination (serialized as bytes)
     // - nonce (as u64, 8 bytes)
     // - contract_id (serialized as bytes)
     let mut message = soroban_sdk::Bytes::new(env);
+
+    // Add ephemeral account address bytes
+    let account_bytes = account.to_xdr(env);
+    message.append(&account_bytes);
 
     // Add destination address bytes
     let dest_bytes = destination.to_xdr(env);
@@ -52,7 +67,7 @@ fn construct_sweep_message(env: &Env, destination: &Address, contract_id: &Addre
 ///
 /// # Arguments
 /// * `env` - Soroban environment
-/// * `account` - Ephemeral account address (used as context)
+/// * `account` - Ephemeral account address (bound into the signed message)
 /// * `destination` - Destination wallet address
 /// * `signature` - Ed25519 signature (64 bytes)
 ///
@@ -60,7 +75,7 @@ fn construct_sweep_message(env: &Env, destination: &Address, contract_id: &Addre
 /// Ok(()) if signature is valid, Error otherwise
 pub fn verify_sweep_auth(
     env: &Env,
-    _account: &Address,
+    account: &Address,
     destination: &Address,
     signature: &BytesN<64>,
 ) -> Result<(), Error> {
@@ -72,7 +87,7 @@ pub fn verify_sweep_auth(
     let contract_id = env.current_contract_address();
 
     // Construct the message that should have been signed
-    let message = construct_sweep_message(env, destination, &contract_id);
+    let message = construct_sweep_message(env, account, destination, &contract_id);
 
     // Verify the Ed25519 signature
     env.crypto()

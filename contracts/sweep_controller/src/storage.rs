@@ -1,6 +1,22 @@
+//! Storage key audit (Issue #25).
+//!
+//! All keys live in the [`DataKey`] enum and are read/written exclusively
+//! through `env.storage().instance()`. Soroban scopes instance storage to the
+//! individual deployed contract instance, so keys are already namespaced by
+//! the contract's own address at the host level — two deployments of this
+//! contract cannot collide, and no manual address prefix is required.
+//!
+//! Within a single instance, every `#[contracttype]` enum variant serialises
+//! to a distinct key. The variants below are unique and non-overlapping, so
+//! there are no intra-contract collisions either.
+
 use soroban_sdk::{contracttype, Address, BytesN, Env};
 
-/// Data keys for contract storage
+/// Data keys for contract storage.
+///
+/// Each variant is a distinct instance-storage key. Instance storage is
+/// automatically namespaced per deployed contract instance by the Soroban
+/// host, preventing cross-instance collisions.
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {

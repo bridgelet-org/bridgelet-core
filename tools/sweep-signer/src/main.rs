@@ -7,13 +7,13 @@
 //!         sweep-signer pubkey --signer-seed-hex <64 hex chars>
 //!
 //!   2. Per sweep, once deployed: produce the signature for execute_sweep().
-//!         sweep-signer sign --contract-id ... --destination ... --nonce ... --signer-seed-hex ...
+//!         sweep-signer sign --contract-id ... --account ... --destination ... --nonce ... --signer-seed-hex ...
 //!
 //! Message format (matches contracts/sweep_controller/src/authorization.rs
 //! exactly - NOT the timestamp-including format that was in the old
 //! docs/SIGNATURE_FORMAT.md before it was corrected):
 //!
-//!   message = SHA256( destination.to_xdr() || nonce_be_u64(8 bytes) || contract_id.to_xdr() )
+//!   message = SHA256( account.to_xdr() || destination.to_xdr() || nonce_be_u64(8 bytes) || contract_id.to_xdr() )
 //!   signature = Ed25519_sign(message, signer_private_key)
 //!
 //! Accepts the signing key as EITHER:
@@ -61,6 +61,12 @@ struct SignArgs {
     /// SweepController contract ID (C... address)
     #[arg(long)]
     contract_id: String,
+
+    /// Ephemeral account address the sweep authorizes (C... address). Bound
+    /// into the signed message so a captured signature cannot be replayed
+    /// against a different account.
+    #[arg(long)]
+    account: String,
 
     /// Destination wallet address funds will be swept to (G... address)
     #[arg(long)]
@@ -140,10 +146,12 @@ fn main() {
             // Address::to_xdr() encoding, guaranteed to match on-chain.
             let env = Env::default();
 
+            let account = Address::from_str(&env, &args.account);
             let destination = Address::from_str(&env, &args.destination);
             let contract_id = Address::from_str(&env, &args.contract_id);
 
             let mut message = Bytes::new(&env);
+            message.append(&account.to_xdr(&env));
             message.append(&destination.to_xdr(&env));
 
             for shift in (0..8).rev() {
