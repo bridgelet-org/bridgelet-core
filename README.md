@@ -33,48 +33,76 @@ Bridgelet Core contains the Soroban smart contracts that enforce single-use rest
 
 ## Contracts
 
-### 1. EphemeralAccount Contract
-Manages restrictions on temporary accounts:
-- Single inbound payment enforcement
-- Authorized sweep destination
-- Time-based expiration logic
+### 1. `ephemeral_account`
+- Single inbound payment enforcement (multi-asset supported, one payment per asset)
+- Controller-gated sweep + gas-free `sweep_claim` path
+- Time-based expiration (`expiry_ledger`) with recovery-address fallback
+- Internal base-reserve reclaim bookkeeping
 - Event emission for auditability
+- Upgradeable via `upgrade()` (admin-gated)
 
-### 2. SweepController Contract
-Handles fund transfers:
-- Validates claim authorization
-- Executes atomic sweeps
-- Handles multi-asset transfers
-- Reclaims base reserves
+### 2. `sweep_controller`
+- Real Ed25519 signature verification with nonce replay protection
+- Optional "locked" mode restricting sweeps to one pre-authorized destination
+- Executes atomic multi-asset SEP-41 token transfers
+- Gas-free `claim()` path for recipient-signed, relayer-submitted sweeps
+
+### 3. `reserve_contract`
+- Admin-set base reserve amount (bounded to 10,000 XLM / 100,000,000,000 stroops)
+- Simple init/get/set/has interface - no integration wiring into `ephemeral_account` yet (see note above)
+
+### 4. `account_factory`
+- Batch-deploys N `ephemeral_account` instances from a stored WASM hash in a single transaction
+- Per-account init failures are caught but the specific error is currently discarded
 
 ## Project Structure
 
+```
 contracts/
 ├── ephemeral_account/
 │   ├── src/
-│   │   ├── lib.rs           # Main contract
+│   │   ├── lib.rs           # Main contract (initialize, record_payment, sweep, sweep_claim, expire, upgrade...)
 │   │   ├── storage.rs       # State management
 │   │   ├── events.rs        # Event definitions
-│   │   └── errors.rs        # Error types
+│   │   ├── errors.rs        # Error types
+│   │   └── test.rs          # Unit tests
 │   └── Cargo.toml
 ├── sweep_controller/
 │   ├── src/
 │   │   ├── lib.rs
-│   │   ├── authorization.rs
-│   │   └── transfers.rs
-│   │   ├── storage.rs       # State management
-│   │   └── errors.rs        # Error types
+│   │   ├── authorization.rs # Ed25519 verification + nonce logic
+│   │   ├── transfers.rs     # SEP-41 token transfer execution
+│   │   ├── storage.rs
+│   │   └── errors.rs
+│   ├── tests/
+│   │   └── integration.rs
+│   └── Cargo.toml
+├── reserve_contract/
+│   ├── src/
+│   │   ├── lib.rs
+│   │   ├── storage.rs
+│   │   ├── events.rs
+│   │   ├── errors.rs
+│   │   └── test.rs
+│   └── Cargo.toml
+├── account_factory/
+│   ├── src/
+│   │   ├── lib.rs
+│   │   └── test.rs
 │   └── Cargo.toml
 └── shared/
-└── types.rs             # Shared types
+    └── src/
+        ├── lib.rs
+        └── types.rs          # Payment, AccountStatus, AccountInfo, AccountInitRequest/Result
+```
 
 ## Prerequisites
 ```bash
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Install Soroban CLI
-cargo install --locked soroban-cli --version 22.0.0
+# Install Stellar CLI
+cargo install --locked stellar-cli --version 23.4.1
 
 # Add wasm target
 rustup target add wasm32-unknown-unknown
@@ -89,6 +117,7 @@ apt-get install binaryen
 ```
 
 ## Build & Deploy
+
 ```bash
 # Build contracts (with WASM optimization if binaryen is installed)
 ./scripts/build.sh
@@ -100,24 +129,43 @@ apt-get install binaryen
 # Run tests
 cargo test
 
-# Deploy to testnet
-soroban contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/ephemeral_account.wasm \
-  --network testnet \
-  --source SIGNER_SECRET_KEY
+# Set .env values with:
+$ set -a
+source .env
+set +a
+
+# then deploy
+
+./scripts/deploy-testnet.sh
 ```
+
+**Fix needed before this script is production-usable:** deploy `reserve_contract` (and `account_factory`, if you intend to use it) and either set `RESERVE_CONTRACT_ID` from that deployment or remove the references to it.
 
 ## Testing
+
 ```bash
-# Unit tests
-cargo test
+# scripts/test.sh currently only runs `cargo test` for ephemeral_account.
+# It does NOT run sweep_controller, reserve_contract, or account_factory tests.
+./scripts/test.sh
 
-# Integration tests
-cargo test --test integration
+# To actually cover everything that has tests:
+for c in ephemeral_account sweep_controller reserve_contract account_factory; do
+  (cd contracts/$c && cargo test)
+done
 
-# Deploy to local sandbox for testing
-./scripts/test-local.sh
+# sweep_controller's integration tests live under tests/, not src/, and need the
+# --test flag explicitly:
+(cd contracts/sweep_controller && cargo test --test integration)
 ```
+
+There is no `scripts/test-local.sh` in this repo - earlier README drafts referenced it, but the actual local-testing entrypoint is `scripts/test.sh` (unit tests only; no local sandbox deployment).
+
+## CI/CD
+
+**Currently disabled - see [CI/CD - currently disabled](#cicd--currently-disabled) above.** The workflow files exist but their bodies are commented out (test.yml fully; deploy-testnet.yml's actual deploy steps). Treat any prior documentation claiming automated testnet deployment on merge as aspirational, not current behavior.
+
+#### Required GitHub Secrets (once workflows are re-enabled)
+- `TESTNET_DEPLOYER_SECRET_KEY`: Stellar testnet deployer secret key (`S...` format)
 
 ## CI/CD
 
@@ -150,55 +198,96 @@ To trigger a manual deployment:
 
 ## Contract Interfaces
 
-### EphemeralAccount
+These interfaces are published as real Rust traits in
+[`contracts/shared/src/interfaces.rs`](contracts/shared/src/interfaces.rs)
+(`EphemeralAccountInterface`, `SweepControllerInterface`). Each contract
+implements the matching trait, so the interface stays in sync with the
+implementation at compile time. The error type is an associated type, letting
+each contract keep its own error enum.
+
+### EphemeralAccount (actual signatures)
 ```rust
 pub trait EphemeralAccountInterface {
-    // Initialize ephemeral account with restrictions
     fn initialize(
         env: Env,
         creator: Address,
         expiry_ledger: u32,
         recovery_address: Address,
+        authorized_controller: Address,  // <- not in earlier README drafts
+        admin: Address,                  // <- not in earlier README drafts
     ) -> Result<(), Error>;
-    
-    // Record inbound payment (called automatically)
+
     fn record_payment(env: Env, amount: i128, asset: Address) -> Result<(), Error>;
-    
-    // Execute sweep to permanent wallet
-    fn sweep(env: Env, destination: Address) -> Result<(), Error>;
-    
-    // Check if account is expired
+
+    // NOTE: auth_signature is accepted but NOT cryptographically verified here.
+    fn sweep(env: Env, destination: Address, auth_signature: BytesN<64>) -> Result<(), Error>;
+
+    // Gas-free path used by SweepController::claim(); no signature param.
+    fn sweep_claim(env: Env, destination: Address) -> Result<(), Error>;
+
     fn is_expired(env: Env) -> bool;
 }
 ```
 
-See [Bridgelet Documentation](https://github.com/bridgelet-org/bridgelet) for full API reference.
+### SweepController (actual signatures)
+```rust
+pub trait SweepControllerInterface {
+    fn initialize(
+        env: Env,
+        creator: Address,
+        authorized_signer: BytesN<32>,
+        authorized_destination: Option<Address>,
+    ) -> Result<(), Error>;
+
+    fn execute_sweep(
+        env: Env,
+        ephemeral_account: Address,
+        destination: Address,
+        auth_signature: BytesN<64>,
+    ) -> Result<(), Error>;
+
+    fn claim(env: Env, recipient: Address, ephemeral_account: Address) -> Result<(), Error>;
+
+    fn can_sweep(env: Env, ephemeral_account: Address) -> bool;
+
+    fn update_authorized_destination(env: Env, new_destination: Address) -> Result<(), Error>;
+}
+```
 
 ## Events
 
-Contracts emit events for off-chain monitoring:
 ```rust
 AccountCreated { creator, expiry_ledger }
 PaymentReceived { amount, asset }
+MultiPaymentReceived { ... }
 SweepExecutedMulti { destination, payments }
 AccountExpired { recovery_address, total_amount, reserve_amount }
+ReserveReclaimed { destination, amount, sweep_id, fully_reclaimed, remaining_reserve }
+SweepCompleted { ephemeral_account, destination, amount }        # emitted by SweepController
+DestinationAuthorized { destination }                            # emitted by SweepController
+DestinationUpdated { old_destination, new_destination }          # emitted by SweepController
 ```
 
 ## Security Considerations
 
-- All storage keys use proper namespacing
-- Authorization checks on every state-changing operation
-- Reentrancy protection via Soroban's execution model
-- Timestamp-based expiration uses ledger time
+- All storage keys use proper namespacing.
+- Reentrancy protection via status update before external calls (`Swept` status is set before transfer logic runs).
+- Timestamp-based expiration uses ledger sequence, not wall-clock time.
+- **Real signature verification only happens inside `SweepController`.** Do not treat `EphemeralAccount::sweep()`'s `auth_signature` parameter as verified - it isn't.
+- `AccountFactory::batch_initialize` swallows per-account error detail; a partial-failure batch will tell you *which* address failed but not why - plan monitoring accordingly.
 
-See [Security Audit Report](./docs/security-audit.md) (coming soon)
+See [Security Model](./docs/security.md), [Signature Format](./docs/SIGNATURE_FORMAT.md), and [Reentrancy Analysis](./docs/reentrancy-analysis.md).
 
 ## Documentation
 
 - [Contract Architecture](./docs/architecture.md)
 - [API Reference](./docs/api-reference.md)
 - [Security Model](./docs/security.md)
+- [Signature Format](./docs/SIGNATURE_FORMAT.md)
+- [Reentrancy Analysis](./docs/reentrancy-analysis.md)
 - [Testing Guide](./docs/testing.md)
+
+There is no `CONTRIBUTING.md` in this repository at present.
 
 ## License
 

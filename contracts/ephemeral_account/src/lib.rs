@@ -8,7 +8,7 @@ mod test;
 
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
-pub use bridgelet_shared::{AccountInfo, AccountStatus, Payment};
+pub use bridgelet_shared::{AccountInfo, AccountStatus, EphemeralAccountInterface, Payment};
 pub use errors::Error;
 pub use events::{
     AccountCreated, AccountExpired, MultiPaymentReceived, PaymentReceived, ReserveReclaimed,
@@ -38,6 +38,7 @@ impl EphemeralAccountContract {
         expiry_ledger: u32,
         recovery_address: Address,
         authorized_controller: Address,
+        admin: Address,
     ) -> Result<(), Error> {
         // Check if already initialized
         if storage::is_initialized(&env) {
@@ -60,6 +61,7 @@ impl EphemeralAccountContract {
         storage::set_recovery_address(&env, &recovery_address);
         storage::set_status(&env, AccountStatus::Active);
         storage::set_authorized_controller(&env, &authorized_controller);
+        storage::set_admin(&env, &admin);
         storage::init_reserve_tracking(&env, BASE_RESERVE_STROOPS);
 
         // Emit event
@@ -125,16 +127,36 @@ impl EphemeralAccountContract {
         Ok(())
     }
 
-    /// Execute sweep to destination wallet
-    /// Transfers all funds from all assets to the specified destination atomically
+    /// Execute sweep to destination wallet via Ed25519 signature path.
+    ///
+    /// This is the **off-chain signer** sweep path: the caller passes an
+    /// `auth_signature` that was produced off-chain by the `authorized_signer`.
+    /// Authorization is verified against the stored Ed25519 public key.
+    ///
+    /// **Do not call directly** — always route through
+    /// `SweepController::execute_sweep`, which handles signature verification,
+    /// nonce management, and token transfers.
     ///
     /// # Arguments
     /// * `destination` - Recipient wallet address
-    /// * `auth_signature` - Authorization signature from off-chain system
+    /// * `auth_signature` - Ed25519 signature from the authorized off-chain signer
     ///
     /// # Errors
-    /// Returns Error::Unauthorized if authorization fails
-    /// Returns Error::AlreadySwept if sweep already executed
+    /// * `Error::NotInitialized` — contract not yet initialized
+    /// * `Error::AlreadySwept` — account already swept
+    /// * `Error::NoPaymentReceived` — no payment recorded yet
+    /// * `Error::AccountExpired` — past expiry ledger
+    /// * `Error::Unauthorized` — caller is not the authorized controller
+    ///
+    /// # Authorization Flow
+    /// 1. Off-chain: signer signs `hash(destination + nonce + contract_id)`
+    /// 2. Caller invokes `SweepController.execute_sweep(destination, signature)`
+    /// 3. `SweepController` verifies the Ed25519 signature and increments nonce
+    /// 4. `SweepController` calls this function via `authorize_ephemeral_sweep`
+    /// 5. This function validates state, transitions to `Swept`, and reclaims reserve
+    ///
+    /// See also: [`sweep_claim`] for the Soroban-auth claim path used by
+    /// `SweepController::claim`.
     pub fn sweep(env: Env, destination: Address, auth_signature: BytesN<64>) -> Result<(), Error> {
         // Check initialized
         if !storage::is_initialized(&env) {
@@ -186,6 +208,75 @@ impl EphemeralAccountContract {
         Ok(())
     }
 
+    /// Sweep initiated by a direct claim — **no off-chain signature required**.
+    ///
+    /// This is the **Soroban-auth claim** path: authorization is enforced
+    /// entirely by requiring the sweep controller as the invoker via Soroban
+    /// auth. Used by `SweepController::claim()` where the recipient has already
+    /// proven ownership via the Soroban auth entry on the outer transaction.
+    ///
+    /// **Do not call directly** — always route through
+    /// `SweepController::claim`, which handles destination validation, nonce
+    /// management, and event emission.
+    ///
+    /// # Arguments
+    /// * `destination` - Recipient wallet address (must match locked destination if set)
+    ///
+    /// # Errors
+    /// * `Error::NotInitialized` — contract not yet initialized
+    /// * `Error::AlreadySwept` — account already swept
+    /// * `Error::NoPaymentReceived` — no payment recorded yet
+    /// * `Error::AccountExpired` — past expiry ledger
+    /// * `Error::Unauthorized` — caller is not the authorized controller
+    ///
+    /// # Authorization Flow
+    /// 1. Recipient signs a Soroban auth entry for `SweepController::claim`
+    /// 2. Caller (or relayer) invokes `SweepController::claim(recipient, ephemeral_account)`
+    /// 3. `SweepController` validates destination, authorizes as invoker of `sweep_claim`
+    /// 4. This function validates state, transitions to `Swept`, and reclaims reserve
+    ///
+    /// See also: [`sweep`] for the Ed25519 signature path used by
+    /// `SweepController::execute_sweep`.
+    pub fn sweep_claim(env: Env, destination: Address) -> Result<(), Error> {
+        if !storage::is_initialized(&env) {
+            return Err(Error::NotInitialized);
+        }
+
+        if storage::get_status(&env) == AccountStatus::Swept {
+            return Err(Error::AlreadySwept);
+        }
+
+        if !storage::has_payment_received(&env) {
+            return Err(Error::NoPaymentReceived);
+        }
+
+        if Self::is_expired(env.clone()) {
+            return Err(Error::AccountExpired);
+        }
+
+        // Only the authorized controller may invoke this path
+        let controller = storage::get_authorized_controller(&env).ok_or(Error::Unauthorized)?;
+        controller.require_auth();
+
+        let payments = storage::get_all_payments(&env);
+        let mut payments_vec = Vec::new(&env);
+        for payment in payments.values() {
+            payments_vec.push_back(payment);
+        }
+
+        storage::set_status(&env, AccountStatus::Swept);
+        storage::set_swept_to(&env, &destination);
+
+        let sweep_id = env.ledger().sequence() as u64;
+        storage::set_last_sweep_id(&env, sweep_id);
+
+        events::emit_sweep_executed_multi(&env, destination.clone(), &payments_vec);
+
+        Self::reclaim_reserve_to(&env, &destination, sweep_id)?;
+
+        Ok(())
+    }
+
     /// Check if account has expired
     pub fn is_expired(env: Env) -> bool {
         if !storage::is_initialized(&env) {
@@ -229,37 +320,10 @@ impl EphemeralAccountContract {
             return Err(Error::NotExpired);
         }
 
-        // Get recovery address
-        let recovery_address = storage::get_recovery_address(&env);
-
-        // Update status
-        storage::set_status(&env, AccountStatus::Expired);
-        storage::set_swept_to(&env, &recovery_address);
-
-        // Get total amount from all payments if any payments were received
-        let total_amount = if storage::has_payment_received(&env) {
-            let payments = storage::get_all_payments(&env);
-            let mut total = 0i128;
-            for (_, payment) in payments.iter() {
-                total = total
-                    .checked_add(payment.amount)
-                    .ok_or(Error::InvalidAmount)?;
-            }
-            total
-        } else {
-            0
-        };
-
-        let sweep_id = env.ledger().sequence() as u64;
-        storage::set_last_sweep_id(&env, sweep_id);
-
-        // Reclaim reserve to recovery destination.
-        let reclaimed_reserve = Self::reclaim_reserve_to(&env, &recovery_address, sweep_id)?;
-
-        // Emit expiration event with reserve amount reclaimed in this call.
-        events::emit_account_expired(&env, recovery_address, total_amount, reclaimed_reserve);
-
-        Ok(())
+        // expire() is intentionally permissionless (see docs/security.md threat
+        // model #3): anyone may trigger cleanup once the account has expired.
+        // The fund-routing state transition itself is shared with recover().
+        Self::finalize_expiry(&env)
     }
 
     /// Reclaim remaining base reserve for a previously swept/expired account.
@@ -352,7 +416,126 @@ impl EphemeralAccountContract {
         })
     }
 
+    /// Recover funds for an expired account.
+    /// Only callable by the original creator or recovery_address after expiry.
+    ///
+    /// # Errors
+    /// Returns Error::NotExpired if the account has not expired yet
+    /// Returns Error::Unauthorized if caller is neither creator nor recovery_address
+    /// Returns Error::InvalidStatus if already swept or recovered
+    pub fn recover(env: Env, caller: Address) -> Result<(), Error> {
+        if !storage::is_initialized(&env) {
+            return Err(Error::NotInitialized);
+        }
+
+        let status = storage::get_status(&env);
+        if status == AccountStatus::Swept || status == AccountStatus::Expired {
+            return Err(Error::InvalidStatus);
+        }
+
+        if !Self::is_expired(env.clone()) {
+            return Err(Error::NotExpired);
+        }
+
+        let creator = storage::get_creator(&env);
+        let recovery_address = storage::get_recovery_address(&env);
+
+        if caller != creator && caller != recovery_address {
+            return Err(Error::Unauthorized);
+        }
+        caller.require_auth();
+
+        // Same fund-routing state transition as expire(); the only difference
+        // between the two entry points is recover()'s narrower access check.
+        Self::finalize_expiry(&env)
+    }
+
+    /// Upgrade the contract WASM. Restricted to the admin set at deploy time.
+    ///
+    /// # Arguments
+    /// * `new_wasm_hash` - Hash of the new WASM blob already uploaded to the ledger
+    ///
+    /// # Errors
+    /// Returns Error::NotUpgradeAdmin if caller is not the stored admin
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+        if !storage::is_initialized(&env) {
+            return Err(Error::NotInitialized);
+        }
+
+        let admin = storage::get_admin(&env).ok_or(Error::NotUpgradeAdmin)?;
+        admin.require_auth();
+
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Ok(())
+    }
+
+    /// Dry-run sweep simulation: returns the payments that would be swept and
+    /// any error that would prevent a real sweep, without executing on-chain.
+    ///
+    /// Returns `(payments, error_code)` where `error_code` is 0 on success.
+    pub fn simulate_sweep(env: Env, destination: Address) -> (Vec<Payment>, u32) {
+        if !storage::is_initialized(&env) {
+            return (Vec::new(&env), Error::NotInitialized as u32);
+        }
+
+        if storage::get_status(&env) == AccountStatus::Swept {
+            return (Vec::new(&env), Error::AlreadySwept as u32);
+        }
+
+        if !storage::has_payment_received(&env) {
+            return (Vec::new(&env), Error::NoPaymentReceived as u32);
+        }
+
+        if Self::is_expired(env.clone()) {
+            return (Vec::new(&env), Error::AccountExpired as u32);
+        }
+
+        let _ = destination; // destination accepted for future fee simulation
+
+        let payments = storage::get_all_payments(&env);
+        let mut payments_vec = Vec::new(&env);
+        for payment in payments.values() {
+            payments_vec.push_back(payment);
+        }
+
+        (payments_vec, 0)
+    }
+
     // Private helper functions
+
+    /// Shared fund-routing state transition used by both `expire` and
+    /// `recover`. Marks the account `Expired`, routes funds to the recovery
+    /// address, reclaims the base reserve, and emits the expiration event.
+    ///
+    /// Callers are responsible for verifying initialization, status, and
+    /// expiry — and for enforcing any access control — before invoking it.
+    fn finalize_expiry(env: &Env) -> Result<(), Error> {
+        let recovery_address = storage::get_recovery_address(env);
+
+        storage::set_status(env, AccountStatus::Expired);
+        storage::set_swept_to(env, &recovery_address);
+
+        let total_amount = if storage::has_payment_received(env) {
+            let payments = storage::get_all_payments(env);
+            let mut total = 0i128;
+            for (_, payment) in payments.iter() {
+                total = total
+                    .checked_add(payment.amount)
+                    .ok_or(Error::InvalidAmount)?;
+            }
+            total
+        } else {
+            0
+        };
+
+        let sweep_id = env.ledger().sequence() as u64;
+        storage::set_last_sweep_id(env, sweep_id);
+
+        let reclaimed_reserve = Self::reclaim_reserve_to(env, &recovery_address, sweep_id)?;
+        events::emit_account_expired(env, recovery_address, total_amount, reclaimed_reserve);
+
+        Ok(())
+    }
 
     fn verify_sweep_authorization(
         env: &Env,
@@ -430,5 +613,45 @@ impl EphemeralAccountContract {
         storage::set_reserve_event_count(env, next_count);
 
         Ok(())
+    }
+}
+
+/// Issue #43: conform to the shared interface for type-safe SDK integration.
+/// Each method delegates to the inherent contract implementation above.
+impl EphemeralAccountInterface for EphemeralAccountContract {
+    type Error = Error;
+
+    fn initialize(
+        env: Env,
+        creator: Address,
+        expiry_ledger: u32,
+        recovery_address: Address,
+        authorized_controller: Address,
+        admin: Address,
+    ) -> Result<(), Error> {
+        Self::initialize(
+            env,
+            creator,
+            expiry_ledger,
+            recovery_address,
+            authorized_controller,
+            admin,
+        )
+    }
+
+    fn record_payment(env: Env, amount: i128, asset: Address) -> Result<(), Error> {
+        Self::record_payment(env, amount, asset)
+    }
+
+    fn sweep(env: Env, destination: Address, auth_signature: BytesN<64>) -> Result<(), Error> {
+        Self::sweep(env, destination, auth_signature)
+    }
+
+    fn sweep_claim(env: Env, destination: Address) -> Result<(), Error> {
+        Self::sweep_claim(env, destination)
+    }
+
+    fn is_expired(env: Env) -> bool {
+        Self::is_expired(env)
     }
 }

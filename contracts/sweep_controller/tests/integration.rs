@@ -252,33 +252,92 @@ fn test_claim_rejects_wrong_recipient_for_locked_destination() {
 }
 
 #[test]
-fn test_unauthorized_signer_not_set() {
+fn test_initialize_with_authorized_destination() {
     let env = Env::default();
-    env.mock_all_auths();
 
-    // Deploy controller without initialization
     let controller_id = env.register(SweepController, ());
     let controller_client = SweepControllerClient::new(&env, &controller_id);
+    let creator = Address::generate(&env);
+    let recipient = Address::generate(&env);
+    let (authorized_signer, _) = generate_test_keypair(&env);
+    controller_client
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &creator,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &controller_id,
+                fn_name: "initialize",
+                args: (&creator, &authorized_signer, &Some(recipient.clone())).into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .initialize(&creator, &authorized_signer, &Some(recipient.clone()));
 
-    // Deploy ephemeral account
     let ephemeral_id = env.register(EphemeralAccountContract, ());
     let ephemeral_client = EphemeralAccountContractClient::new(&env, &ephemeral_id);
-
-    // Setup
-    let creator = Address::generate(&env);
+    let account_creator = Address::generate(&env);
     let recovery = Address::generate(&env);
-    let destination = Address::generate(&env);
-    let asset = Address::generate(&env);
-    let expiry = env.ledger().sequence() + 1000;
+    let expiry = env.ledger().sequence() + 1_000;
+    ephemeral_client
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &account_creator,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &ephemeral_id,
+                fn_name: "initialize",
+                args: (
+                    &account_creator,
+                    &expiry,
+                    &recovery,
+                    &controller_id,
+                    &account_creator,
+                )
+                    .into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .initialize(
+            &account_creator,
+            &expiry,
+            &recovery,
+            &controller_id,
+            &account_creator,
+        );
+
+    let asset_id = Address::generate(&env);
+    env.mock_all_auths_allowing_non_root_auth();
+    ephemeral_client.record_payment(&100, &asset_id);
+    env.set_auths(&[]);
+
+    let result = controller_client.try_claim(&recipient, &ephemeral_id);
 
     // Initialize ephemeral account, authorizing this SweepController to call sweep()
     ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
 
-    // Record payment
-    ephemeral_client.record_payment(&100, &asset);
+// ──────────────────────────────────────────────────────────────────────────────
+// Issue #160: Full integration test suite — EphemeralAccount + SweepController
+// ──────────────────────────────────────────────────────────────────────────────
 
-    // Create a signature
-    let auth_sig = BytesN::from_array(&env, &[3u8; 64]);
+/// Helper: deploy both contracts and return clients + IDs.
+fn deploy_contracts(
+    env: &Env,
+) -> (
+    SweepControllerClient<'_>,
+    Address,
+    EphemeralAccountContractClient<'_>,
+    Address,
+) {
+    let controller_id = env.register(SweepController, ());
+    let controller_client = SweepControllerClient::new(env, &controller_id);
+
+    let ephemeral_id = env.register(EphemeralAccountContract, ());
+    let ephemeral_client = EphemeralAccountContractClient::new(env, &ephemeral_id);
+
+    (
+        controller_client,
+        controller_id,
+        ephemeral_client,
+        ephemeral_id,
+    )
+}
 
     // Execute sweep without initializing controller - should fail
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

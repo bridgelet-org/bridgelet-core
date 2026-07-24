@@ -17,8 +17,8 @@ jobs:
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: stable
-        target: wasm32-unknown-unknown
+        toolchain: 1.89.0
+        target: wasm32v1-none
         override: true
 
     - name: Install soroban-cli
