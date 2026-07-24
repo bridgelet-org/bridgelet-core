@@ -13,3 +13,4 @@ bridgelet-shared = { path = "../shared", version = "0.1.0" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+proptest = "1"

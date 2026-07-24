@@ -282,37 +282,10 @@ impl EphemeralAccountContract {
             return Err(Error::NotExpired);
         }
 
-        // Get recovery address
-        let recovery_address = storage::get_recovery_address(&env);
-
-        // Update status
-        storage::set_status(&env, AccountStatus::Expired);
-        storage::set_swept_to(&env, &recovery_address);
-
-        // Get total amount from all payments if any payments were received
-        let total_amount = if storage::has_payment_received(&env) {
-            let payments = storage::get_all_payments(&env);
-            let mut total = 0i128;
-            for (_, payment) in payments.iter() {
-                total = total
-                    .checked_add(payment.amount)
-                    .ok_or(Error::InvalidAmount)?;
-            }
-            total
-        } else {
-            0
-        };
-
-        let sweep_id = env.ledger().sequence() as u64;
-        storage::set_last_sweep_id(&env, sweep_id);
-
-        // Reclaim reserve to recovery destination.
-        let reclaimed_reserve = Self::reclaim_reserve_to(&env, &recovery_address, sweep_id)?;
-
-        // Emit expiration event with reserve amount reclaimed in this call.
-        events::emit_account_expired(&env, recovery_address, total_amount, reclaimed_reserve);
-
-        Ok(())
+        // expire() is intentionally permissionless (see docs/security.md threat
+        // model #3): anyone may trigger cleanup once the account has expired.
+        // The fund-routing state transition itself is shared with recover().
+        Self::finalize_expiry(&env)
     }
 
     /// Reclaim remaining base reserve for a previously swept/expired account.
@@ -434,29 +407,9 @@ impl EphemeralAccountContract {
         }
         caller.require_auth();
 
-        storage::set_status(&env, AccountStatus::Expired);
-        storage::set_swept_to(&env, &recovery_address);
-
-        let total_amount = if storage::has_payment_received(&env) {
-            let payments = storage::get_all_payments(&env);
-            let mut total = 0i128;
-            for (_, payment) in payments.iter() {
-                total = total
-                    .checked_add(payment.amount)
-                    .ok_or(Error::InvalidAmount)?;
-            }
-            total
-        } else {
-            0
-        };
-
-        let sweep_id = env.ledger().sequence() as u64;
-        storage::set_last_sweep_id(&env, sweep_id);
-
-        let reclaimed_reserve = Self::reclaim_reserve_to(&env, &recovery_address, sweep_id)?;
-        events::emit_account_expired(&env, recovery_address, total_amount, reclaimed_reserve);
-
-        Ok(())
+        // Same fund-routing state transition as expire(); the only difference
+        // between the two entry points is recover()'s narrower access check.
+        Self::finalize_expiry(&env)
     }
 
     /// Upgrade the contract WASM. Restricted to the admin set at deploy time.
@@ -511,6 +464,40 @@ impl EphemeralAccountContract {
     }
 
     // Private helper functions
+
+    /// Shared fund-routing state transition used by both `expire` and
+    /// `recover`. Marks the account `Expired`, routes funds to the recovery
+    /// address, reclaims the base reserve, and emits the expiration event.
+    ///
+    /// Callers are responsible for verifying initialization, status, and
+    /// expiry — and for enforcing any access control — before invoking it.
+    fn finalize_expiry(env: &Env) -> Result<(), Error> {
+        let recovery_address = storage::get_recovery_address(env);
+
+        storage::set_status(env, AccountStatus::Expired);
+        storage::set_swept_to(env, &recovery_address);
+
+        let total_amount = if storage::has_payment_received(env) {
+            let payments = storage::get_all_payments(env);
+            let mut total = 0i128;
+            for (_, payment) in payments.iter() {
+                total = total
+                    .checked_add(payment.amount)
+                    .ok_or(Error::InvalidAmount)?;
+            }
+            total
+        } else {
+            0
+        };
+
+        let sweep_id = env.ledger().sequence() as u64;
+        storage::set_last_sweep_id(env, sweep_id);
+
+        let reclaimed_reserve = Self::reclaim_reserve_to(env, &recovery_address, sweep_id)?;
+        events::emit_account_expired(env, recovery_address, total_amount, reclaimed_reserve);
+
+        Ok(())
+    }
 
     fn verify_sweep_authorization(
         env: &Env,
