@@ -313,6 +313,7 @@ fn test_initialize_with_authorized_destination() {
     ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id);
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Full Integration Test Suite — Issue #165
 // Issue #160: Full integration test suite — EphemeralAccount + SweepController
 // ──────────────────────────────────────────────────────────────────────────────
 

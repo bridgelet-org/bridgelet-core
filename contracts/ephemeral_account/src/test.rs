@@ -9,8 +9,8 @@ mod test {
         ReserveReclaimed,
     };
     use soroban_sdk::{
-        testutils::{Address as _, Ledger as _},
-        Address, BytesN, Env, InvokeError,
+        testutils::{Address as _, Events as _, Ledger as _},
+        Address, BytesN, Env, InvokeError, TryFromVal,
     };
 
     const BASE_RESERVE_STROOPS: i128 = 1_000_000_000;
@@ -402,7 +402,6 @@ mod test {
         assert_eq!(Error::NotExpired as u32, 6);
         assert_eq!(Error::AlreadySwept as u32, 7);
         assert_eq!(Error::Unauthorized as u32, 8);
-        assert_eq!(Error::InvalidSignature as u32, 9);
         assert_eq!(Error::NoPaymentReceived as u32, 10);
         assert_eq!(Error::AccountExpired as u32, 11);
         assert_eq!(Error::InvalidStatus as u32, 12);

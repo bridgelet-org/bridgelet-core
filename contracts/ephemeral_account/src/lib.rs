@@ -40,6 +40,8 @@ impl EphemeralAccountContract {
         authorized_controller: Address,
         admin: Address,
     ) -> Result<(), Error> {
+        storage::extend_instance_ttl(&env);
+
         // Check if already initialized
         if storage::is_initialized(&env) {
             return Err(Error::AlreadyInitialized);
@@ -81,6 +83,8 @@ impl EphemeralAccountContract {
     /// Returns Error::InvalidAmount if amount is not positive
     /// Returns Error::DuplicateAsset if asset already has a payment
     pub fn record_payment(env: Env, amount: i128, asset: Address) -> Result<(), Error> {
+        storage::extend_instance_ttl(&env);
+
         // Check initialized
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
@@ -158,6 +162,8 @@ impl EphemeralAccountContract {
     /// See also: [`sweep_claim`] for the Soroban-auth claim path used by
     /// `SweepController::claim`.
     pub fn sweep(env: Env, destination: Address, auth_signature: BytesN<64>) -> Result<(), Error> {
+        storage::extend_instance_ttl(&env);
+
         // Check initialized
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
@@ -238,6 +244,8 @@ impl EphemeralAccountContract {
     /// See also: [`sweep`] for the Ed25519 signature path used by
     /// `SweepController::execute_sweep`.
     pub fn sweep_claim(env: Env, destination: Address) -> Result<(), Error> {
+        storage::extend_instance_ttl(&env);
+
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
@@ -279,6 +287,8 @@ impl EphemeralAccountContract {
 
     /// Check if account has expired
     pub fn is_expired(env: Env) -> bool {
+        storage::extend_instance_ttl(&env);
+
         if !storage::is_initialized(&env) {
             return false;
         }
@@ -291,6 +301,8 @@ impl EphemeralAccountContract {
 
     /// Get current account status
     pub fn get_status(env: Env) -> AccountStatus {
+        storage::extend_instance_ttl(&env);
+
         if !storage::is_initialized(&env) {
             return AccountStatus::Active;
         }
@@ -346,6 +358,8 @@ impl EphemeralAccountContract {
 
     /// Remaining reserve amount (stroops) still eligible for reclaim.
     pub fn get_reserve_remaining(env: Env) -> i128 {
+        storage::extend_instance_ttl(&env);
+
         if !storage::is_initialized(&env) {
             return 0;
         }
@@ -355,6 +369,8 @@ impl EphemeralAccountContract {
 
     /// Tracked reserve currently available for transfer (stroops).
     pub fn get_reserve_available(env: Env) -> i128 {
+        storage::extend_instance_ttl(&env);
+
         if !storage::is_initialized(&env) {
             return 0;
         }
@@ -364,6 +380,8 @@ impl EphemeralAccountContract {
 
     /// Whether reserve has been fully reclaimed.
     pub fn is_reserve_reclaimed(env: Env) -> bool {
+        storage::extend_instance_ttl(&env);
+
         if !storage::is_initialized(&env) {
             return false;
         }
@@ -391,6 +409,8 @@ impl EphemeralAccountContract {
 
     /// Get account information
     pub fn get_info(env: Env) -> Result<AccountInfo, Error> {
+        storage::extend_instance_ttl(&env);
+
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
@@ -424,6 +444,8 @@ impl EphemeralAccountContract {
     /// Returns Error::Unauthorized if caller is neither creator nor recovery_address
     /// Returns Error::InvalidStatus if already swept or recovered
     pub fn recover(env: Env, caller: Address) -> Result<(), Error> {
+        storage::extend_instance_ttl(&env);
+
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
@@ -458,6 +480,8 @@ impl EphemeralAccountContract {
     /// # Errors
     /// Returns Error::NotUpgradeAdmin if caller is not the stored admin
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+        storage::extend_instance_ttl(&env);
+
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
@@ -474,6 +498,8 @@ impl EphemeralAccountContract {
     ///
     /// Returns `(payments, error_code)` where `error_code` is 0 on success.
     pub fn simulate_sweep(env: Env, destination: Address) -> (Vec<Payment>, u32) {
+        storage::extend_instance_ttl(&env);
+
         if !storage::is_initialized(&env) {
             return (Vec::new(&env), Error::NotInitialized as u32);
         }

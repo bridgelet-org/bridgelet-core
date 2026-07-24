@@ -35,6 +35,8 @@ impl SweepController {
         authorized_signer: BytesN<32>,
         authorized_destination: Option<Address>,
     ) -> Result<(), Error> {
+        storage::extend_instance_ttl(&env);
+
         // Check if already initialized
         if storage::get_authorized_signer(&env).is_some() {
             return Err(Error::AuthorizationFailed);
@@ -78,6 +80,8 @@ impl SweepController {
         destination: Address,
         auth_signature: BytesN<64>,
     ) -> Result<(), Error> {
+        storage::extend_instance_ttl(&env);
+
         Self::validate_destination(&env, &destination)?;
 
         // Verify authorization
@@ -95,6 +99,8 @@ impl SweepController {
     /// transaction-source signature. This enables a relayer/SDK to submit the
     /// transaction while the recipient only signs the authorization payload.
     pub fn claim(env: Env, recipient: Address, ephemeral_account: Address) -> Result<(), Error> {
+        storage::extend_instance_ttl(&env);
+
         recipient.require_auth();
         Self::validate_destination(&env, &recipient)?;
         Self::authorize_claim(&env, &ephemeral_account, &recipient)?;
@@ -207,6 +213,8 @@ impl SweepController {
     }
     /// Check if an account is ready for sweep
     pub fn can_sweep(env: Env, ephemeral_account: Address) -> bool {
+        storage::extend_instance_ttl(&env);
+
         let account_client = EphemeralAccountClient::new(&env, &ephemeral_account);
 
         // Check if account exists and has payment
@@ -226,6 +234,8 @@ impl SweepController {
     /// Starts at 0 at `initialize()` and increments by 1 after every
     /// successful `execute_sweep()`/`claim()` call.
     pub fn get_nonce(env: Env) -> u64 {
+        storage::extend_instance_ttl(&env);
+
         storage::get_sweep_nonce(&env)
     }
 
@@ -241,6 +251,8 @@ impl SweepController {
     /// Returns Error::AuthorizationFailed if caller is not the creator
     /// Returns Error::AccountAlreadySwept if a sweep has already been executed
     pub fn update_authorized_destination(env: Env, new_destination: Address) -> Result<(), Error> {
+        storage::extend_instance_ttl(&env);
+
         // Verify creator authorization
         let creator = storage::get_creator(&env).ok_or(Error::AuthorizationFailed)?;
         creator.require_auth();
