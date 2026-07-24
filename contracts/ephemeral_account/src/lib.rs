@@ -6,7 +6,7 @@ mod storage;
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, xdr::ToXdr, Address, BytesN, Env, Vec};
 
 pub use bridgelet_shared::{AccountInfo, AccountStatus, EphemeralAccountInterface, Payment};
 pub use errors::Error;
@@ -38,6 +38,7 @@ impl EphemeralAccountContract {
         expiry_ledger: u32,
         recovery_address: Address,
         authorized_controller: Address,
+        authorized_signer: BytesN<32>,
         admin: Address,
     ) -> Result<(), Error> {
         // Check if already initialized
@@ -61,6 +62,7 @@ impl EphemeralAccountContract {
         storage::set_recovery_address(&env, &recovery_address);
         storage::set_status(&env, AccountStatus::Active);
         storage::set_authorized_controller(&env, &authorized_controller);
+        storage::set_authorized_signer(&env, &authorized_signer);
         storage::set_admin(&env, &admin);
         storage::init_reserve_tracking(&env, BASE_RESERVE_STROOPS);
 
@@ -501,11 +503,43 @@ impl EphemeralAccountContract {
 
     fn verify_sweep_authorization(
         env: &Env,
-        _destination: &Address,
-        _signature: &BytesN<64>,
+        destination: &Address,
+        signature: &BytesN<64>,
     ) -> Result<(), Error> {
         let controller = storage::get_authorized_controller(env).ok_or(Error::Unauthorized)?;
         controller.require_auth();
+
+        // Verify the Ed25519 signature against the stored authorized signer
+        let signer = storage::get_authorized_signer(env).ok_or(Error::Unauthorized)?;
+
+        // Construct the message: hash(destination + nonce + contract_id)
+        let nonce = storage::get_last_sweep_id(env);
+        let contract_id = env.current_contract_address();
+
+        let mut message = soroban_sdk::Bytes::new(env);
+        let dest_bytes = destination.to_xdr(env);
+        message.append(&dest_bytes);
+
+        // Nonce as big-endian u64
+        message.push_back(((nonce >> 56) & 0xFF) as u8);
+        message.push_back(((nonce >> 48) & 0xFF) as u8);
+        message.push_back(((nonce >> 40) & 0xFF) as u8);
+        message.push_back(((nonce >> 32) & 0xFF) as u8);
+        message.push_back(((nonce >> 24) & 0xFF) as u8);
+        message.push_back(((nonce >> 16) & 0xFF) as u8);
+        message.push_back(((nonce >> 8) & 0xFF) as u8);
+        message.push_back((nonce & 0xFF) as u8);
+
+        let contract_bytes = contract_id.to_xdr(env);
+        message.append(&contract_bytes);
+
+        let hash = env.crypto().sha256(&message);
+        let hash_bytes: BytesN<32> = hash.into();
+
+        // Verify Ed25519 signature
+        env.crypto()
+            .ed25519_verify(&signer, &hash_bytes.into(), signature);
+
         Ok(())
     }
 
@@ -589,6 +623,7 @@ impl EphemeralAccountInterface for EphemeralAccountContract {
         expiry_ledger: u32,
         recovery_address: Address,
         authorized_controller: Address,
+        authorized_signer: BytesN<32>,
         admin: Address,
     ) -> Result<(), Error> {
         Self::initialize(
@@ -597,6 +632,7 @@ impl EphemeralAccountInterface for EphemeralAccountContract {
             expiry_ledger,
             recovery_address,
             authorized_controller,
+            authorized_signer,
             admin,
         )
     }

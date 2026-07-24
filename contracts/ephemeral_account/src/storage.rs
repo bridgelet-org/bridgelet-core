@@ -18,6 +18,7 @@ pub enum DataKey {
     ReserveEventCount,
     LastReserveEvent,
     AuthorizedController,
+    AuthorizedSigner,
     Admin,
 }
 
@@ -225,4 +226,15 @@ pub fn set_admin(env: &Env, admin: &Address) {
 
 pub fn get_admin(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::Admin)
+}
+
+// Authorized signer (Ed25519 public key for sweep signature verification)
+pub fn set_authorized_signer(env: &Env, signer: &soroban_sdk::BytesN<32>) {
+    env.storage()
+        .instance()
+        .set(&DataKey::AuthorizedSigner, signer);
+}
+
+pub fn get_authorized_signer(env: &Env) -> Option<soroban_sdk::BytesN<32>> {
+    env.storage().instance().get(&DataKey::AuthorizedSigner)
 }
