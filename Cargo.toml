@@ -8,6 +8,10 @@ members = [
     "contracts/account_factory",
 ]
 
+# Issue #41: centralise the soroban-sdk version pin for every workspace member.
+[workspace.dependencies]
+soroban-sdk = "22.0.0"
+
 [profile.release]
 opt-level = "z"
 overflow-checks = true

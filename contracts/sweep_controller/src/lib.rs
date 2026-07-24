@@ -18,7 +18,7 @@ use soroban_sdk::{
 };
 
 use authorization::AuthContext;
-use bridgelet_shared::{AccountStatus, Payment};
+use bridgelet_shared::{AccountStatus, Payment, SweepControllerInterface};
 pub use errors::Error;
 
 #[contract]
@@ -289,6 +289,34 @@ impl SweepController {
         emit_destination_updated(&env, old_destination, new_destination);
 
         Ok(())
+    }
+}
+
+/// Issue #43: conform to the shared interface for type-safe SDK integration.
+/// Each method delegates to the inherent contract implementation above.
+impl SweepControllerInterface for SweepController {
+    type Error = Error;
+
+    fn initialize(
+        env: Env,
+        creator: Address,
+        authorized_signer: BytesN<32>,
+        authorized_destination: Option<Address>,
+    ) -> Result<(), Error> {
+        Self::initialize(env, creator, authorized_signer, authorized_destination)
+    }
+
+    fn execute_sweep(
+        env: Env,
+        ephemeral_account: Address,
+        destination: Address,
+        auth_signature: BytesN<64>,
+    ) -> Result<(), Error> {
+        Self::execute_sweep(env, ephemeral_account, destination, auth_signature)
+    }
+
+    fn claim(env: Env, recipient: Address, ephemeral_account: Address) -> Result<(), Error> {
+        Self::claim(env, recipient, ephemeral_account)
     }
 }
 
