@@ -188,32 +188,18 @@ impl EphemeralAccountContract {
         // Note: In production, implement proper signature verification
         // For MVP, we trust the SDK to only call with valid signatures
         Self::verify_sweep_authorization(&env, &destination, &auth_signature)?;
-
-        // Get all payments
-        let payments = storage::get_all_payments(&env);
-        let mut payments_vec = Vec::new(&env);
-        for payment in payments.values() {
-            payments_vec.push_back(payment);
-        }
-
-        // Update status before transfer to prevent reentrancy
-        storage::set_status(&env, AccountStatus::Swept);
-        storage::set_swept_to(&env, &destination);
-
-        // Note: Actual token transfers happen in the SDK via Stellar SDK.
-        // This contract enforces authorization/state transitions and reserve lifecycle.
-        let sweep_id = env.ledger().sequence() as u64;
-        storage::set_last_sweep_id(&env, sweep_id);
-
-        // Emit sweep event once transfer authorization/state update succeeds.
-        events::emit_sweep_executed_multi(&env, destination.clone(), &payments_vec);
-
-        // Reclaim base reserve only after successful sweep state transition.
-        Self::reclaim_reserve_to(&env, &destination, sweep_id)?;
-
-        Ok(())
+        Self::execute_sweep_core(&env, destination)
     }
 
+    pub fn sweep_claim(env: Env, destination: Address) -> Result<(), Error> {
+        let controller = storage::get_authorized_controller(&env).ok_or(Error::Unauthorized)?;
+        controller.require_auth();
+        Self::execute_sweep_core(&env, destination)
+    }
+
+    /// Shared sweep logic: pre-condition checks, state transition, events, reserve reclaim.
+    fn execute_sweep_core(env: &Env, destination: Address) -> Result<(), Error> {
+        if !storage::is_initialized(env) {
     /// Sweep initiated by a direct claim — **no off-chain signature required**.
     ///
     /// This is the **Soroban-auth claim** path: authorization is enforced
@@ -249,38 +235,30 @@ impl EphemeralAccountContract {
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
-
-        if storage::get_status(&env) == AccountStatus::Swept {
+        if storage::get_status(env) == AccountStatus::Swept {
             return Err(Error::AlreadySwept);
         }
-
-        if !storage::has_payment_received(&env) {
+        if !storage::has_payment_received(env) {
             return Err(Error::NoPaymentReceived);
         }
-
         if Self::is_expired(env.clone()) {
             return Err(Error::AccountExpired);
         }
 
-        // Only the authorized controller may invoke this path
-        let controller = storage::get_authorized_controller(&env).ok_or(Error::Unauthorized)?;
-        controller.require_auth();
-
-        let payments = storage::get_all_payments(&env);
-        let mut payments_vec = Vec::new(&env);
+        let payments = storage::get_all_payments(env);
+        let mut payments_vec = Vec::new(env);
         for payment in payments.values() {
             payments_vec.push_back(payment);
         }
 
-        storage::set_status(&env, AccountStatus::Swept);
-        storage::set_swept_to(&env, &destination);
+        storage::set_status(env, AccountStatus::Swept);
+        storage::set_swept_to(env, &destination);
 
         let sweep_id = env.ledger().sequence() as u64;
-        storage::set_last_sweep_id(&env, sweep_id);
+        storage::set_last_sweep_id(env, sweep_id);
 
-        events::emit_sweep_executed_multi(&env, destination.clone(), &payments_vec);
-
-        Self::reclaim_reserve_to(&env, &destination, sweep_id)?;
+        events::emit_sweep_executed_multi(env, destination.clone(), &payments_vec);
+        Self::reclaim_reserve_to(env, &destination, sweep_id)?;
 
         Ok(())
     }
@@ -420,7 +398,7 @@ impl EphemeralAccountContract {
 
         Ok(AccountInfo {
             creator: storage::get_creator(&env),
-            status: storage::get_status(&env),
+            status: Self::get_status(env.clone()),
             expiry_ledger: storage::get_expiry_ledger(&env),
             recovery_address: storage::get_recovery_address(&env),
             payment_received: payment_count > 0,
