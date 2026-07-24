@@ -235,6 +235,7 @@ mod test {
             &expiry_ledger,
             &recovery,
             &Address::generate(&env),
+            &Address::generate(&env),
         );
         let result = client.try_record_payment(&0, &asset);
 
@@ -257,6 +258,7 @@ mod test {
             &expiry_ledger,
             &recovery,
             &Address::generate(&env),
+            &Address::generate(&env),
         );
 
         assert!(matches!(result, Err(Ok(Error::InvalidExpiry))));
@@ -277,6 +279,7 @@ mod test {
             &creator,
             &expiry_ledger,
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
         let result = client.try_expire();
@@ -300,6 +303,7 @@ mod test {
             &creator,
             &expiry_ledger,
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
         let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
@@ -325,6 +329,7 @@ mod test {
             &creator,
             &expiry_ledger,
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
         client.record_payment(&100, &asset);
@@ -354,6 +359,7 @@ mod test {
             &expiry_ledger,
             &recovery,
             &Address::generate(&env),
+            &Address::generate(&env),
         );
         client.record_payment(&100, &asset);
 
@@ -381,6 +387,7 @@ mod test {
             &creator,
             &expiry_ledger,
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
         client.record_payment(&100, &asset);
@@ -616,11 +623,13 @@ mod test {
             &expiry_ledger,
             &recovery,
             &Address::generate(&env),
+            &Address::generate(&env),
         );
         client.initialize(
             &creator,
             &(expiry_ledger + 1),
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
     }
@@ -643,6 +652,7 @@ mod test {
             &creator,
             &expiry_ledger,
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
         client.record_payment(&100, &asset);
@@ -668,6 +678,7 @@ mod test {
             &creator,
             &expiry_ledger,
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
         client.record_payment(&100, &asset);
@@ -695,6 +706,7 @@ mod test {
             &creator,
             &expiry_ledger,
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
         client.record_payment(&100, &asset);
@@ -725,6 +737,7 @@ mod test {
             &creator,
             &expiry_ledger,
             &recovery,
+            &Address::generate(&env),
             &Address::generate(&env),
         );
         println!("initialize auth result: {:?}", result);
