@@ -192,6 +192,13 @@ There is no `scripts/test-local.sh` in this repo - earlier README drafts referen
 
 ## Contract Interfaces
 
+These interfaces are published as real Rust traits in
+[`contracts/shared/src/interfaces.rs`](contracts/shared/src/interfaces.rs)
+(`EphemeralAccountInterface`, `SweepControllerInterface`). Each contract
+implements the matching trait, so the interface stays in sync with the
+implementation at compile time. The error type is an associated type, letting
+each contract keep its own error enum.
+
 ### EphemeralAccount (actual signatures)
 ```rust
 pub trait EphemeralAccountInterface {

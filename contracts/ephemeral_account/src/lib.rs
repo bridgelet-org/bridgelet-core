@@ -8,7 +8,7 @@ mod test;
 
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
-pub use bridgelet_shared::{AccountInfo, AccountStatus, Payment};
+pub use bridgelet_shared::{AccountInfo, AccountStatus, EphemeralAccountInterface, Payment};
 pub use errors::Error;
 pub use events::{
     AccountCreated, AccountExpired, MultiPaymentReceived, PaymentReceived, ReserveReclaimed,
@@ -588,5 +588,45 @@ impl EphemeralAccountContract {
         storage::set_reserve_event_count(env, next_count);
 
         Ok(())
+    }
+}
+
+/// Issue #43: conform to the shared interface for type-safe SDK integration.
+/// Each method delegates to the inherent contract implementation above.
+impl EphemeralAccountInterface for EphemeralAccountContract {
+    type Error = Error;
+
+    fn initialize(
+        env: Env,
+        creator: Address,
+        expiry_ledger: u32,
+        recovery_address: Address,
+        authorized_controller: Address,
+        admin: Address,
+    ) -> Result<(), Error> {
+        Self::initialize(
+            env,
+            creator,
+            expiry_ledger,
+            recovery_address,
+            authorized_controller,
+            admin,
+        )
+    }
+
+    fn record_payment(env: Env, amount: i128, asset: Address) -> Result<(), Error> {
+        Self::record_payment(env, amount, asset)
+    }
+
+    fn sweep(env: Env, destination: Address, auth_signature: BytesN<64>) -> Result<(), Error> {
+        Self::sweep(env, destination, auth_signature)
+    }
+
+    fn sweep_claim(env: Env, destination: Address) -> Result<(), Error> {
+        Self::sweep_claim(env, destination)
+    }
+
+    fn is_expired(env: Env) -> bool {
+        Self::is_expired(env)
     }
 }
