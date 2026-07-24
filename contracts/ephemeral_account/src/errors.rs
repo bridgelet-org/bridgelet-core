@@ -12,7 +12,6 @@ pub enum Error {
     NotExpired = 6,
     AlreadySwept = 7,
     Unauthorized = 8,
-    InvalidSignature = 9,
     NoPaymentReceived = 10,
     AccountExpired = 11,
     InvalidStatus = 12,
