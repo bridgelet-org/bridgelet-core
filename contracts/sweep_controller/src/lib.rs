@@ -110,6 +110,7 @@ impl SweepController {
         let amount: i128 = info.payments.iter().map(|p| p.amount).sum();
 
         Self::authorize_claim(&env, &ephemeral_account, &recipient)?;
+        authorization::increment_nonce(&env);
         emit_sweep_completed(&env, ephemeral_account, recipient, amount);
 
         Ok(())

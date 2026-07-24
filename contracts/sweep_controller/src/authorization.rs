@@ -64,20 +64,21 @@ pub fn verify_sweep_auth(
     destination: &Address,
     signature: &BytesN<64>,
 ) -> Result<(), Error> {
-    // Get the authorized signer public key from storage
     let authorized_signer =
         storage::get_authorized_signer(env).ok_or(Error::AuthorizedSignerNotSet)?;
 
-    // Get the sweep controller contract address
     let contract_id = env.current_contract_address();
-
-    // Construct the message that should have been signed
     let message = construct_sweep_message(env, destination, &contract_id);
 
-    // Verify the Ed25519 signature
-    env.crypto()
-        .ed25519_verify(&authorized_signer, &message.into(), signature);
-    Ok(())
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        env.crypto()
+            .ed25519_verify(&authorized_signer, &message.into(), signature);
+    }));
+
+    match result {
+        Ok(()) => Ok(()),
+        Err(_) => Err(Error::AuthorizationFailed),
+    }
 }
 
 /// Increment the nonce after successful authorization
