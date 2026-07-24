@@ -72,18 +72,18 @@ jobs:
     - name: Build all contracts
       run: |
         cd contracts/ephemeral_account
-        cargo build --target wasm32-unknown-unknown --release
+        cargo build --target wasm32v1-none --release
         cd ../sweep_controller
-        cargo build --target wasm32-unknown-unknown --release
+        cargo build --target wasm32v1-none --release
         cd ../reserve_contract
-        cargo build --target wasm32-unknown-unknown --release
+        cargo build --target wasm32v1-none --release
 
     - name: Upload WASM artifacts
       uses: actions/upload-artifact@v4
       with:
         name: wasm-contracts
         path: |
-          contracts/ephemeral_account/target/wasm32-unknown-unknown/release/*.wasm
-          contracts/sweep_controller/target/wasm32-unknown-unknown/release/*.wasm
-          contracts/reserve_contract/target/wasm32-unknown-unknown/release/*.wasm
+          contracts/ephemeral_account/target/wasm32v1-none/release/*.wasm
+          contracts/sweep_controller/target/wasm32v1-none/release/*.wasm
+          contracts/reserve_contract/target/wasm32v1-none/release/*.wasm
         retention-days: 30

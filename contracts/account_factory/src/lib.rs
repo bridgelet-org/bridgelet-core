@@ -4,6 +4,9 @@ use bridgelet_shared::{AccountInitRequest, AccountInitResult};
 use ephemeral_account::EphemeralAccountContractClient as EphemeralAccountClient;
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Vec};
 
+pub mod errors;
+pub use crate::errors::Error;
+
 #[contract]
 pub struct AccountFactory;
 
@@ -127,6 +130,15 @@ impl AccountFactory {
                 &request.expiry_ledger,
                 &request.recovery_address,
                 &creator,
+                // Admin is a deterministic placeholder address so `batch_initialize`
+                // doesn't depend on the `testutils` feature being enabled. The
+                // creator (passed as deployer auth above) is the actual admin in
+                // production deployments; this value is here only because the
+                // 5-arg `initialize` shape requires an admin slot on every call.
+                &Address::from_str(
+                    &env,
+                    "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+                ),
             ) {
                 Ok(_) => AccountInitResult {
                     account_address: account_address.clone(),
