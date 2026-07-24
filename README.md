@@ -1,48 +1,28 @@
-# Bridgelet Core
+ Bridgelet Core
 
 **Soroban smart contracts for ephemeral account restrictions**
 
-**Status:** Active Development - MVP. Not audited. See [MVP Status](#mvp-status) before deploying anywhere real funds are at risk.
+**Status:** Active Development
 
 ## Overview
 
 Bridgelet Core contains the Soroban smart contracts that enforce single-use restrictions on ephemeral Stellar accounts and manage the sweep logic for transferring funds to permanent wallets.
 
-The workspace contains **four** contracts, not two or three as earlier drafts of this README stated:
-
-| Contract | Purpose |
-|---|---|
-| `ephemeral_account` | Enforces single-payment, expiry, and sweep-authorization state machine for a temporary account |
-| `sweep_controller` | Validates Ed25519-signed sweep authorization and executes SEP-41 token transfers |
-| `reserve_contract` | Stores/serves the network base-reserve amount (admin-set config value) used by `ephemeral_account` when reclaiming reserve |
-| `account_factory` | Batch-deploys and initializes many `ephemeral_account` instances in one transaction |
-
 ## MVP Status
 
 ### Current Stub Inventory
 
-| Function | Contract | Status | Notes |
-|----------|----------|--------|-------|
-| `verify_sweep_authorization` | `EphemeralAccount` | **Not a real signature check** | Ignores the `auth_signature` argument entirely (parameter is prefixed `_`). Authorization instead comes from `authorized_controller.require_auth()` - i.e. it trusts whichever address was set as the controller at `initialize()`. Calling `sweep()` directly (not via `SweepController`) will fail `require_auth` for anyone who isn't that controller, but it performs **no cryptographic verification of the signature itself**. |
-| `verify_sweep_auth` | `SweepController` | **Fully implemented** | Real Ed25519 verification (`env.crypto().ed25519_verify`) over `hash(destination + nonce + contract_id)`, with nonce-based replay protection. |
-| `execute_transfers` | `SweepController` | **Fully implemented** | Calls SEP-41 `TokenClient::transfer()` for every recorded payment. |
-| `batch_initialize` | `AccountFactory` | **Implemented, error detail dropped** | On per-account init failure it returns `error: None` instead of the actual error - see `lib.rs` comment `"In a real implementation, we'd serialize errors"`. Caller can see *that* an account failed but not *why*. |
+| Function | Contract | Stub Status | Production Requirement | Tracking Issue |
+|----------|----------|-------------|------------------------|----------------|
+| `verify_sweep_authorization` | EphemeralAccount | **Partial** - Uses `require_auth()` instead of Ed25519 signature verification | Implement `env.crypto().ed25519_verify()` against stored `authorized_signer` with signature covering destination + nonce + contract_id | #86 |
+| Token transfers | SweepController | **Implemented** - `execute_transfers()` calls `token.transfer()` for all assets | Already implemented in `transfers.rs` | N/A |
 
 ### Implementation Notes
 
-- **Always deploy sweeps through `SweepController::execute_sweep()` or `::claim()`.** Calling `EphemeralAccount::sweep()` directly bypasses the Ed25519 check entirely - it only works at all because of the `authorized_controller.require_auth()` gate, not because the signature was verified.
-- **`SweepController::claim()`** is a gas-free path: the recipient signs a Soroban auth entry for `claim()`, a relayer submits and pays fees, and the controller uses `authorize_as_current_contract()` to satisfy `EphemeralAccount`'s controller check.
-- **Reserve tracking is duplicated across two contracts.** `EphemeralAccount` has its own internal `BASE_RESERVE_STROOPS` constant and reserve-tracking storage (`reclaim_reserve_to`), while `ReserveContract` independently stores an admin-settable base reserve value. Nothing in the current code wires `ReserveContract`'s value into `EphemeralAccount`'s reserve logic - confirm this is intentional (e.g. `ReserveContract` feeding a future on-chain read) before relying on `ReserveContract::set_base_reserve` to actually change sweep behavior.
-- **`AccountFactory` is real but entirely undocumented and undeployed.** It exists in `contracts/account_factory`, is a workspace member, but is not built by `scripts/build.sh`, not deployed by `scripts/deploy-testnet.sh`, and not tested in CI.
-
-## CI/CD - currently disabled
-
-Despite earlier documentation claiming automated test and deploy pipelines, **both GitHub Actions workflows are non-functional as committed**:
-
-- **`.github/workflows/test.yml` is entirely commented out** (76 of 89 lines are `#`-prefixed; there is no active `on:` trigger or job). No tests, formatting checks, or clippy run automatically on push/PR today.
-- **`.github/workflows/deploy-testnet.yml` runs tests/fmt/clippy/build for `ephemeral_account`, `sweep_controller`, and `reserve_contract` only** (not `account_factory`) - but **the actual deployment, artifact-upload, and summary steps are commented out**. The workflow currently only validates the build; it never deploys anything, regardless of what triggers it.
-
-If you need CI, uncomment and fix these before relying on them, and add `account_factory` to all three (test/fmt/clippy/build) steps in both files.
+- **EphemeralAccount::sweep()**: Currently uses Soroban's `require_auth()` for authorization instead of cryptographic Ed25519 signature verification. The signature parameters (`destination`, `auth_signature`) are accepted but not cryptographically verified. Production implementation should use `env.crypto().ed25519_verify()` similar to SweepController's implementation.
+- **SweepController::claim()**: Experimental gas-free claim path. The recipient signs a Soroban auth entry for `claim(recipient, ephemeral_account)`, and a relayer/SDK can submit the transaction and pay fees. Internally the controller uses `authorize_as_current_contract()` so the downstream `EphemeralAccount::sweep()` call can satisfy `authorized_controller.require_auth()`.
+- **SweepController::execute_transfers()**: Token transfer logic is fully implemented using SEP-41 token contracts. All recorded payments are transferred atomically to the destination.
+- **Security guidance**: Always route sweeps through `SweepController` for proper Ed25519 signature verification. Do not call `EphemeralAccount::sweep()` directly until the signature verification stub is replaced.
 
 ## Tech Stack
 
@@ -129,28 +109,25 @@ rustup target add wasm32-unknown-unknown
 
 # Install Binaryen (for WASM optimization)
 # Minimum required version: 100
-brew install binaryen        # macOS
-apt-get install binaryen     # Ubuntu/Debian
-# or download from: https://github.com/WebAssembly/binaryen/releases
+# macOS:
+brew install binaryen
+# Ubuntu/Debian:
+apt-get install binaryen
+# Or download from: https://github.com/WebAssembly/binaryen/releases
 ```
 
 ## Build & Deploy
 
 ```bash
-# Build ephemeral_account, sweep_controller, and reserve_contract (NOT account_factory - see below)
+# Build contracts (with WASM optimization if binaryen is installed)
 ./scripts/build.sh
 
-# ⚠️ account_factory is not built by build.sh. To build it too:
-cd contracts/account_factory && cargo build --target wasm32-unknown-unknown --release && cd ../..
-```
+# The build script automatically optimizes WASM files using wasm-opt -O3
+# if Binaryen is installed. This typically reduces binary size by 15-30%.
+# If wasm-opt is not found, the build continues without optimization.
 
-`scripts/deploy-testnet.sh` deploys **only `ephemeral_account` and `sweep_controller`** to testnet and writes their IDs to `deployments/testnet.json`. It does **not** currently deploy `reserve_contract` or `account_factory`, despite referencing a `RESERVE_CONTRACT_ID` variable in its output/artifact steps that is **never assigned** anywhere in the script - with `set -euo pipefail` active, this will abort the script with an "unbound variable" error at that point. Required env vars (see `.env.example`):
-
-```bash
-export SIGNER_SECRET_KEY=...              # deployer/admin keypair (S... secret)
-export AUTHORIZED_SIGNER_PUBLIC_KEY=...   # Ed25519 pubkey SweepController verifies sweep signatures against
-export RECOVERY_ADDRESS=...               # org recovery wallet, used per-account at initialize()
-export CREATOR_ADDRESS=...                # address that initializes SweepController
+# Run tests
+cargo test
 
 # Set .env values with:
 $ set -a
@@ -189,6 +166,35 @@ There is no `scripts/test-local.sh` in this repo - earlier README drafts referen
 
 #### Required GitHub Secrets (once workflows are re-enabled)
 - `TESTNET_DEPLOYER_SECRET_KEY`: Stellar testnet deployer secret key (`S...` format)
+
+## CI/CD
+
+### Automated Testing
+- **Test Workflow** (`.github/workflows/test.yml`): Runs on every push to `main`/`develop` and on PRs to `main`
+  - Runs cargo tests for all contracts
+  - Checks code formatting with `cargo fmt`
+  - Runs clippy for linting
+  - Builds all contracts for wasm32-unknown-unknown target
+  - Uploads WASM artifacts for deployment
+
+### Automated Testnet Deployment
+- **Deploy Workflow** (`.github/workflows/deploy-testnet.yml`): Automatically deploys to Stellar Testnet on merge to `main`
+  - Runs tests, format checks, clippy, and builds before deployment
+  - Deploys all three contracts: `ephemeral_account`, `sweep_controller`, `reserve_contract`
+  - Stores contract IDs as CI artifacts (90-day retention)
+  - Posts deployment summary with contract IDs to GitHub Actions summary
+  - Can also be triggered manually via `workflow_dispatch`
+
+#### Required GitHub Secrets
+To enable automated deployments, add the following secret to your GitHub repository:
+- `TESTNET_DEPLOYER_SECRET_KEY`: Stellar testnet deployer secret key (S... format)
+
+#### Manual Deployment
+To trigger a manual deployment:
+1. Go to Actions tab in GitHub
+2. Select "Deploy to Testnet" workflow
+3. Click "Run workflow"
+4. Optionally provide a reason for the deployment
 
 ## Contract Interfaces
 

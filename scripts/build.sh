@@ -26,6 +26,18 @@ fi
 echo "Building all workspace contracts (ephemeral_account, sweep_controller, reserve_contract, account_factory)..."
 stellar contract build
 
+# Build sweep_controller contract
+echo "Building sweep_controller..."
+cd contracts/sweep_controller
+cargo build --target wasm32-unknown-unknown --release
+cd ../..
+
+# Build reserve_contract contract
+echo "Building reserve_contract..."
+cd contracts/reserve_contract
+cargo build --target wasm32-unknown-unknown --release
+cd ../..
+
 echo "✅ Build complete!"
-echo "Contracts location: target/wasm32v1-none/release/"
-ls -lh target/wasm32v1-none/release/*.wasm 2>/dev/null || echo "⚠️  No .wasm files found — check the build output above for errors."
+echo "Contracts location: contracts/*/target/wasm32-unknown-unknown/release/"
+ls -lh contracts/*/target/wasm32-unknown-unknown/release/*.wasm

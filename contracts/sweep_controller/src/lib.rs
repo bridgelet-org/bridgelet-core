@@ -5,13 +5,7 @@ mod errors;
 mod storage;
 mod transfers;
 
-mod ephemeral_account_contract {
-    soroban_sdk::contractimport!(
-        file = "../../target/wasm32v1-none/release/ephemeral_account.wasm"
-    );
-}
-use ephemeral_account_contract::Client as EphemeralAccountClient;
-
+use ephemeral_account::EphemeralAccountContractClient as EphemeralAccountClient;
 use soroban_sdk::{
     auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
     contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, IntoVal, Vec,
@@ -109,13 +103,11 @@ impl SweepController {
 
         recipient.require_auth();
         Self::validate_destination(&env, &recipient)?;
+        Self::authorize_claim(&env, &ephemeral_account, &recipient)?;
 
-        // Read payment info before sweep_claim() changes the account state
         let account_client = EphemeralAccountClient::new(&env, &ephemeral_account);
         let info = account_client.get_info();
-        let amount: i128 = info.payments.iter().map(|p| p.amount).sum();
-
-        Self::authorize_claim(&env, &ephemeral_account, &recipient)?;
+        let amount = info.payments.iter().map(|p| p.amount).sum();
         emit_sweep_completed(&env, ephemeral_account, recipient, amount);
 
         Ok(())
@@ -188,15 +180,7 @@ impl SweepController {
             return Err(Error::AccountNotReady);
         }
 
-        // Execute the actual token transfers for all recorded payments.
-        //
-        // info.payments yields ephemeral_account_contract::Payment (the
-        // contractimport!-generated type) — structurally identical to
-        // bridgelet_shared::Payment but a distinct Rust type, since
-        // contractimport! derives its own types from the wasm's interface
-        // metadata rather than reusing the shared crate. Convert explicitly
-        // field-by-field; transfers::execute_transfers expects the
-        // bridgelet_shared version.
+        // Execute the actual token transfers for all recorded payments
         let mut payments_vec = Vec::new(env);
         for payment in info.payments.iter() {
             payments_vec.push_back(Payment {
@@ -215,30 +199,16 @@ impl SweepController {
         Ok(())
     }
 
-    // Replace the entire authorize_claim function:
     fn authorize_claim(
         env: &Env,
         ephemeral_account: &Address,
         recipient: &Address,
     ) -> Result<(), Error> {
-        // Authorize the controller as the invoker of sweep_claim on the ephemeral account
-        let args = (recipient.clone(),).into_val(env);
-        let context = ContractContext {
-            contract: ephemeral_account.clone(),
-            fn_name: symbol_short!("swp_claim"), // symbol_short! max 9 chars — abbreviated
-            args,
-        };
-        let auth_entries = Vec::from_array(
-            env,
-            [InvokerContractAuthEntry::Contract(SubContractInvocation {
-                context,
-                sub_invocations: Vec::new(env),
-            })],
-        );
-        env.authorize_as_current_contract(auth_entries);
+        let auth_signature = BytesN::from_array(env, &[0; 64]);
+        Self::authorize_ephemeral_sweep(env, ephemeral_account, recipient, &auth_signature);
 
         let account_client = EphemeralAccountClient::new(env, ephemeral_account);
-        account_client.sweep_claim(recipient);
+        account_client.sweep(recipient, &auth_signature);
         Ok(())
     }
     /// Check if an account is ready for sweep

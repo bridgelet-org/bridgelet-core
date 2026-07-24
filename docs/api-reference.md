@@ -318,30 +318,14 @@ Sets up the controller with an authorized Ed25519 signer and an optional locked 
 fn initialize(
     env: Env,
     creator: Address,
-    authorized_signer: BytesN<32>,
-    authorized_destination: Option<Address>,
+    authorized_signer: BytesN<32>
 ) -> Result<(), Error>
 ```
 
 | Parameter | Type | Description |
 | :--- | :--- | :--- |
-| `creator` | `Address` | Address that owns this controller instance. Required to authorize future `update_authorized_destination` calls. Must authorize this call. |
-| `authorized_signer` | `BytesN<32>` | Ed25519 public key used to verify all sweep authorization signatures. |
-| `authorized_destination` | `Option<Address>` | If `Some(addr)`, the controller operates in **locked mode**: sweeps can only transfer to this specific address. If `None`, any destination is accepted (**flexible mode**). |
-
-**Returns:** `Ok(())` on success.
-
-**Errors:**
-
-| Error | Condition |
-| :--- | :--- |
-| `AuthorizationFailed` | `initialize` has already been called. |
-
-**Auth required:** `creator.require_auth()`
-
-**Events emitted:** `DestinationAuthorized { destination }` (only when `authorized_destination` is `Some`).
-
----
+| `creator` | `Address` | Address allowed to manage controller configuration. |
+| `authorized_signer` | `BytesN<32>` | Ed25519 public key for verifying sweep signatures. |
 
 #### `execute_sweep`
 
@@ -356,71 +340,18 @@ fn execute_sweep(
 ) -> Result<(), Error>
 ```
 
-| Parameter | Type | Description |
-| :--- | :--- | :--- |
-| `ephemeral_account` | `Address` | Address of the `EphemeralAccount` contract to sweep. |
-| `destination` | `Address` | Recipient wallet address for all swept funds. |
-| `auth_signature` | `BytesN<64>` | Ed25519 signature over `SHA256(destination_xdr \|\| nonce_u64_be \|\| contract_id_xdr)`. Must be signed by the key in `authorized_signer`. |
-
-**Returns:** `Ok(())` on success.
-
-**Errors:**
-
-| Error | Condition |
-| :--- | :--- |
-| `UnauthorizedDestination` | Controller is in locked mode and `destination` ≠ `authorized_destination`. |
-| `AuthorizationFailed` | `authorized_signer` is not set (controller not initialized). |
-| `AuthorizedSignerNotSet` | Ed25519 public key has not been stored. |
-| `SignatureVerificationFailed` | Signature does not verify against the current nonce and destination. |
-| `AccountNotReady` | Ephemeral account has no recorded payments or zero total amount. |
-| `TransferFailed` | A SEP-41 token `transfer()` call failed. |
-
-**Signature message format:**
-
-```
-message = SHA256(
-    destination.to_xdr()
-    || nonce as u64 big-endian (8 bytes)
-    || controller_contract_address.to_xdr()
-)
-```
-
-The nonce is incremented after each successful `execute_sweep` call to prevent replay attacks.
-
-**Events emitted:** `SweepCompleted { ephemeral_account, destination, amount }`
-
----
-
 #### `claim`
-
-Gas-free claim path for the recipient. The recipient signs a Soroban auth entry for `claim(recipient, ephemeral_account)` only; a relayer or SDK submits the transaction and pays fees.
-
-Internally the controller validates destination (against `authorized_destination` if set) and uses `authorize_as_current_contract()` to invoke `EphemeralAccount::sweep_claim()`. Note that in flexible mode (`authorized_destination = None`), `claim` relies on `recipient.require_auth()` and does not enforce an Ed25519 signature payload.
+Experimental gas-free claim flow. The recipient authorizes the invocation via
+Soroban auth entries, and a relayer/SDK can submit the transaction and pay the
+fees.
 
 ```rust
-fn claim(env: Env, recipient: Address, ephemeral_account: Address) -> Result<(), Error>
+fn claim(
+    env: Env,
+    recipient: Address,
+    ephemeral_account: Address
+) -> Result<(), Error>
 ```
-
-| Parameter | Type | Description |
-| :--- | :--- | :--- |
-| `recipient` | `Address` | The address claiming the funds. Must authorize this call. |
-| `ephemeral_account` | `Address` | Address of the `EphemeralAccount` contract to sweep. |
-
-**Returns:** `Ok(())` on success.
-
-**Errors:**
-
-| Error | Condition |
-| :--- | :--- |
-| `UnauthorizedDestination` | Controller is in locked mode and `recipient` ≠ `authorized_destination`. |
-
-**Auth required:** `recipient.require_auth()`
-
-**Nonce impact:** `claim()` does **not** increment `SweepController`'s `sweep_nonce`.
-
-**Events emitted:** `SweepCompleted { ephemeral_account, destination: recipient, amount }`
-
----
 
 #### `can_sweep`
 

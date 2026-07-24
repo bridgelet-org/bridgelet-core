@@ -10,7 +10,7 @@ members = [
 
 # Issue #41: centralise the soroban-sdk version pin for every workspace member.
 [workspace.dependencies]
-soroban-sdk = "22.0.0"
+soroban-sdk = "=22.0.11"
 
 [profile.release]
 opt-level = "z"
