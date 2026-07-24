@@ -18,6 +18,10 @@ pub use storage::DataKey;
 
 const BASE_RESERVE_STROOPS: i128 = 1_000_000_000;
 
+/// Maximum number of distinct asset payments an ephemeral account can accept.
+/// This limits Soroban resource consumption during sweep operations.
+const MAX_PAYMENTS: u32 = 10;
+
 #[contract]
 pub struct EphemeralAccountContract;
 
@@ -96,9 +100,9 @@ impl EphemeralAccountContract {
             return Err(Error::DuplicateAsset);
         }
 
-        // Check payment limit to prevent gas issues (max 10 assets)
+        // Check payment limit to prevent gas issues
         let payment_count = storage::get_total_payments(&env);
-        if payment_count >= 10 {
+        if payment_count >= MAX_PAYMENTS {
             return Err(Error::TooManyPayments);
         }
 
