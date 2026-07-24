@@ -45,7 +45,9 @@ proptest! {
             &expiry_ledger,
             &recovery,
             &controller,
+            &BytesN::from_array(&env, &[0u8; 32]),
             &Address::generate(&env),
+            &1_000_000_000_i128
         );
 
         for amount in amounts.iter() {
@@ -89,7 +91,9 @@ proptest! {
             &expiry_ledger,
             &recovery,
             &controller,
+            &BytesN::from_array(&env, &[0u8; 32]),
             &Address::generate(&env),
+            &1_000_000_000_i128
         );
         client.record_payment(&amount, &asset);
 
@@ -122,7 +126,9 @@ proptest! {
             &expiry_ledger,
             &recovery,
             &Address::generate(&env),
+            &BytesN::from_array(&env, &[0u8; 32]),
             &Address::generate(&env),
+            &1_000_000_000_i128
         );
 
         let result = client.try_initialize(
@@ -130,7 +136,9 @@ proptest! {
             &(expiry_ledger + 1),
             &recovery,
             &Address::generate(&env),
+            &BytesN::from_array(&env, &[0u8; 32]),
             &Address::generate(&env),
+            &1_000_000_000_i128
         );
 
         prop_assert!(matches!(result, Err(Ok(Error::AlreadyInitialized))));

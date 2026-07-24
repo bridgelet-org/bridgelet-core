@@ -16,8 +16,6 @@ pub use events::{
 };
 pub use storage::DataKey;
 
-const BASE_RESERVE_STROOPS: i128 = 1_000_000_000;
-
 #[contract]
 pub struct EphemeralAccountContract;
 
@@ -38,7 +36,9 @@ impl EphemeralAccountContract {
         expiry_ledger: u32,
         recovery_address: Address,
         authorized_controller: Address,
+        authorized_signer: BytesN<32>,
         admin: Address,
+        base_reserve: i128,
     ) -> Result<(), Error> {
         // Check if already initialized
         if storage::is_initialized(&env) {
@@ -54,6 +54,11 @@ impl EphemeralAccountContract {
             return Err(Error::InvalidExpiry);
         }
 
+        // Validate base reserve is positive
+        if base_reserve <= 0 {
+            return Err(Error::InvalidAmount);
+        }
+
         // Store initialization data
         storage::set_initialized(&env, true);
         storage::set_creator(&env, &creator);
@@ -62,7 +67,7 @@ impl EphemeralAccountContract {
         storage::set_status(&env, AccountStatus::Active);
         storage::set_authorized_controller(&env, &authorized_controller);
         storage::set_admin(&env, &admin);
-        storage::init_reserve_tracking(&env, BASE_RESERVE_STROOPS);
+        storage::init_reserve_tracking(&env, base_reserve);
 
         // Emit event
         events::emit_account_created(&env, creator, expiry_ledger);
@@ -589,7 +594,9 @@ impl EphemeralAccountInterface for EphemeralAccountContract {
         expiry_ledger: u32,
         recovery_address: Address,
         authorized_controller: Address,
+        authorized_signer: BytesN<32>,
         admin: Address,
+        base_reserve: i128,
     ) -> Result<(), Error> {
         Self::initialize(
             env,
@@ -597,7 +604,9 @@ impl EphemeralAccountInterface for EphemeralAccountContract {
             expiry_ledger,
             recovery_address,
             authorized_controller,
+            authorized_signer,
             admin,
+            base_reserve,
         )
     }
 

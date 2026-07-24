@@ -20,7 +20,9 @@ pub trait EphemeralAccountInterface {
         expiry_ledger: u32,
         recovery_address: Address,
         authorized_controller: Address,
+        authorized_signer: BytesN<32>,
         admin: Address,
+        base_reserve: i128,
     ) -> Result<(), Self::Error>;
 
     /// Record an inbound payment to this account.
