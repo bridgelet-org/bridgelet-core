@@ -18,6 +18,7 @@ pub enum DataKey {
     ReserveEventCount,
     LastReserveEvent,
     AuthorizedController,
+    Admin,
 }
 
 // Initialization
@@ -215,4 +216,13 @@ pub fn set_authorized_controller(env: &Env, controller: &Address) {
 
 pub fn get_authorized_controller(env: &Env) -> Option<Address> {
     env.storage().instance().get(&DataKey::AuthorizedController)
+}
+
+// Admin (upgrade authority)
+pub fn set_admin(env: &Env, admin: &Address) {
+    env.storage().instance().set(&DataKey::Admin, admin);
+}
+
+pub fn get_admin(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::Admin)
 }

@@ -12,7 +12,7 @@ use soroban_sdk::{
 };
 
 use authorization::AuthContext;
-use bridgelet_shared::AccountStatus;
+use bridgelet_shared::{AccountStatus, Payment, SweepControllerInterface};
 pub use errors::Error;
 
 #[contract]
@@ -177,7 +177,11 @@ impl SweepController {
         // Execute the actual token transfers for all recorded payments
         let mut payments_vec = Vec::new(env);
         for payment in info.payments.iter() {
-            payments_vec.push_back(payment);
+            payments_vec.push_back(Payment {
+                asset: payment.asset.clone(),
+                amount: payment.amount,
+                timestamp: payment.timestamp,
+            });
         }
 
         transfers::execute_transfers(env, &ephemeral_account, &destination, &payments_vec)
@@ -213,6 +217,18 @@ impl SweepController {
             && !account_client.is_expired()
     }
 
+    /// Return the current sweep nonce for this controller.
+    ///
+    /// Off-chain signers must sign a `construct_sweep_message()` payload
+    /// built with THIS value, not a locally-tracked guess — the contract
+    /// always verifies against its own current on-chain nonce, so a stale
+    /// or mistracked nonce here produces a signature that will not verify.
+    /// Starts at 0 at `initialize()` and increments by 1 after every
+    /// successful `execute_sweep()`/`claim()` call.
+    pub fn get_nonce(env: Env) -> u64 {
+        storage::get_sweep_nonce(&env)
+    }
+
     /// Update the authorized destination address
     ///
     /// This function allows the creator to update the authorized destination before any sweep occurs.
@@ -243,6 +259,34 @@ impl SweepController {
         emit_destination_updated(&env, old_destination, new_destination);
 
         Ok(())
+    }
+}
+
+/// Issue #43: conform to the shared interface for type-safe SDK integration.
+/// Each method delegates to the inherent contract implementation above.
+impl SweepControllerInterface for SweepController {
+    type Error = Error;
+
+    fn initialize(
+        env: Env,
+        creator: Address,
+        authorized_signer: BytesN<32>,
+        authorized_destination: Option<Address>,
+    ) -> Result<(), Error> {
+        Self::initialize(env, creator, authorized_signer, authorized_destination)
+    }
+
+    fn execute_sweep(
+        env: Env,
+        ephemeral_account: Address,
+        destination: Address,
+        auth_signature: BytesN<64>,
+    ) -> Result<(), Error> {
+        Self::execute_sweep(env, ephemeral_account, destination, auth_signature)
+    }
+
+    fn claim(env: Env, recipient: Address, ephemeral_account: Address) -> Result<(), Error> {
+        Self::claim(env, recipient, ephemeral_account)
     }
 }
 
