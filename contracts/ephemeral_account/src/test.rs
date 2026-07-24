@@ -9,8 +9,8 @@ mod test {
         ReserveReclaimed,
     };
     use soroban_sdk::{
-        testutils::{Address as _, Ledger as _},
-        Address, BytesN, Env, InvokeError,
+        symbol_short, testutils::{Address as _, Events, Ledger as _},
+        Address, BytesN, Env, InvokeError, Symbol, TryFromVal,
     };
 
     const BASE_RESERVE_STROOPS: i128 = 1_000_000_000;
@@ -19,6 +19,19 @@ mod test {
         client
             .get_last_reserve_event()
             .expect("reserve event was not emitted")
+    }
+
+    fn find_event_by_topic(env: &Env, topic: Symbol) -> bool {
+        let events = env.events().all();
+        for i in 0..events.len() {
+            let (_, topics, _) = events.get(i).unwrap();
+            if let Ok(sym) = Symbol::try_from_val(env, &topics.get(0).unwrap()) {
+                if sym == topic {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     #[test]
@@ -41,6 +54,8 @@ mod test {
             &controller,
             &Address::generate(&env),
         );
+
+        assert!(find_event_by_topic(&env, symbol_short!("created")));
 
         assert_eq!(client.get_status(), AccountStatus::Active);
         assert!(!client.is_expired());
@@ -72,6 +87,7 @@ mod test {
         );
         client.record_payment(&100, &asset);
 
+        assert!(find_event_by_topic(&env, symbol_short!("payment")));
         assert_eq!(client.get_status(), AccountStatus::PaymentReceived);
     }
 
@@ -99,10 +115,12 @@ mod test {
         );
 
         client.record_payment(&100, &asset1);
+        assert!(find_event_by_topic(&env, symbol_short!("payment")));
         let info = client.get_info();
         assert_eq!(info.payment_count, 1);
 
         client.record_payment(&50, &asset2);
+        assert!(find_event_by_topic(&env, symbol_short!("multi_pay")));
         let info = client.get_info();
         assert_eq!(info.payment_count, 2);
 
@@ -135,6 +153,9 @@ mod test {
 
         let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
         client.sweep(&destination, &auth_sig);
+
+        assert!(find_event_by_topic(&env, symbol_short!("swept_mul")));
+        assert!(find_event_by_topic(&env, symbol_short!("reserve")));
 
         assert_eq!(client.get_status(), AccountStatus::Swept);
         assert_eq!(client.get_reserve_remaining(), 0);
@@ -397,6 +418,7 @@ mod test {
         println!("sweep placeholder auth result: {:?}", result);
 
         assert!(matches!(result, Ok(Ok(()))));
+        assert!(find_event_by_topic(&env, symbol_short!("swept_mul")));
     }
 
     #[test]
@@ -447,6 +469,9 @@ mod test {
 
         let auth_sig = BytesN::from_array(&env, &[0u8; 64]);
         client.sweep(&destination, &auth_sig);
+
+        assert!(find_event_by_topic(&env, symbol_short!("reserve")));
+        assert!(find_event_by_topic(&env, symbol_short!("swept_mul")));
 
         assert_eq!(client.get_status(), AccountStatus::Swept);
         assert_eq!(client.get_reserve_remaining(), 0);
@@ -716,6 +741,9 @@ mod test {
         env.ledger().set_sequence_number(expiry_ledger);
         client.expire();
 
+        assert!(find_event_by_topic(&env, symbol_short!("expired")));
+        assert!(find_event_by_topic(&env, symbol_short!("reserve")));
+
         let info = client.get_info();
         assert_eq!(info.status, AccountStatus::Expired);
         assert_eq!(info.swept_to, Some(recovery));
@@ -774,6 +802,9 @@ mod test {
         env.ledger().set_sequence_number(expiry_ledger);
         client.recover(&creator);
 
+        assert!(find_event_by_topic(&env, symbol_short!("expired")));
+        assert!(find_event_by_topic(&env, symbol_short!("reserve")));
+
         let info = client.get_info();
         assert_eq!(info.status, AccountStatus::Expired);
         assert_eq!(info.swept_to, Some(recovery));
@@ -801,6 +832,9 @@ mod test {
 
         env.ledger().set_sequence_number(expiry_ledger);
         client.recover(&recovery);
+
+        assert!(find_event_by_topic(&env, symbol_short!("expired")));
+        assert!(find_event_by_topic(&env, symbol_short!("reserve")));
 
         assert_eq!(client.get_status(), AccountStatus::Expired);
     }
