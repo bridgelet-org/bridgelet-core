@@ -1,3 +1,16 @@
+//! Contract storage for the SweepController.
+//!
+//! Issue #25 — storage key collision audit:
+//! Every storage key is a distinct variant of the [`DataKey`] enum and is
+//! written to the contract's own `instance()` storage. Soroban isolates
+//! storage per contract instance — one deployed instance can never read or
+//! write another instance's entries — so an explicit contract-address prefix
+//! is unnecessary to prevent cross-instance collisions. Within a single
+//! instance the variants below are mutually exclusive, so no intra-instance
+//! collision is possible either. When adding a key, add a new `DataKey`
+//! variant rather than reusing an existing one or introducing raw
+//! string/symbol keys.
+
 use soroban_sdk::{contracttype, Address, BytesN, Env};
 
 /// Data keys for contract storage

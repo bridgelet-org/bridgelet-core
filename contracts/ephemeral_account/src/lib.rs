@@ -8,12 +8,11 @@ mod test;
 
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
-pub use bridgelet_shared::{AccountInfo, AccountStatus, EphemeralAccountInterface, Payment};
-pub use errors::Error;
-pub use events::{
-    AccountCreated, AccountExpired, MultiPaymentReceived, PaymentReceived, ReserveReclaimed,
-    SweepExecutedMulti,
+pub use bridgelet_shared::{
+    AccountCreated, AccountExpired, AccountInfo, AccountStatus, EphemeralAccountInterface,
+    MultiPaymentReceived, Payment, PaymentReceived, ReserveReclaimed, SweepExecutedMulti,
 };
+pub use errors::Error;
 pub use storage::DataKey;
 
 const BASE_RESERVE_STROOPS: i128 = 1_000_000_000;

@@ -1,5 +1,4 @@
-use crate::events::ReserveReclaimed;
-use bridgelet_shared::{AccountStatus, Payment};
+use bridgelet_shared::{AccountStatus, Payment, ReserveReclaimed};
 use soroban_sdk::{contracttype, Address, Env, Map};
 
 #[contracttype]
