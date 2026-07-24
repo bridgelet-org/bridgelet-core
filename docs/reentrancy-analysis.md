@@ -92,7 +92,18 @@ Verifies that `reclaim_reserve()` returns `0` and emits a no-op event when calle
 | Soroban runtime | Single-threaded WASM, no preemption | All cross-contract callback vectors |
 | Soroban storage model | Atomic snapshot-consistent reads | Read-before-write window |
 | Contract logic (CEI) | `status = Swept` written before external work | Any hypothetical intra-transaction reentry |
-| `AlreadySwept` guard | Status check at entry of `sweep()` | Replay and reentrant sweep calls |
+| `AlreadySwept` guard | Status check at entry of `sweep()` | Direct replay and reentrant `sweep()` calls |
+| `AlreadySwept` guard (indirect) | A second `sweep()` is blocked even when an attacker injects a `record_payment` between attempts | `record_payment`-then-`sweep` replay pattern (issue #239) |
 | Reserve idempotency | `reclaim_reserve()` returns 0 when fully reclaimed | Reserve double-claim |
 
-The combination of Soroban's execution model and the contract's CEI pattern means reentrancy is not a viable attack vector against `sweep()` or `record_payment()`.
+The combination of Soroban's execution model and the contract's CEI pattern means
+**reentrancy cannot drain an already-swept account**. `record_payment` itself is
+**not** reentrancy-locked: it does not read or check `AccountStatus`, performs
+no `require_auth()`, and accepts writes from any caller. Anything described as
+"reentrancy protection" for `record_payment` is therefore **indirect** — the
+only thing blocking the `record_payment`-then-`sweep` replay pattern is the
+`AlreadySwept` guard inside the *second* `sweep()` call, not anything inside
+`record_payment` itself. Callers relying on payment integrity must authenticate
+calls to `record_payment` **out-of-band** (e.g., by restricting who can submit
+those transactions, or by routing them through a service they trust); the
+contract itself does not enforce it. See issue #239 for the original finding.

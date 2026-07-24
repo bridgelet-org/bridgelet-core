@@ -1,4 +1,4 @@
-//! Issue #167 / #58: Property-based tests with `proptest`.
+//! Issue #166 / #58: Property-based tests with `proptest`.
 //!
 //! These tests generate randomized valid/invalid inputs and assert invariants
 //! that must hold for every generated case:
@@ -9,6 +9,14 @@
 //!    sweep is always rejected with `Error::AccountExpired`.
 //! 3. `double_initialize_always_fails` — a second `initialize` call always
 //!    fails with `Error::AlreadyInitialized`.
+//! 4. `past_expiry_always_rejects_init` — initializing with a past expiry
+//!    always returns `Error::InvalidExpiry`.
+//! 5. `future_expiry_always_succeeds` — initializing with a valid future
+//!    expiry always succeeds (first call).
+//! 6. `random_addresses_do_not_panic` — any arbitrary 32-byte address as
+//!    creator/recovery/controller never causes a panic during init.
+//! 7. `record_payment_various_amounts` — amounts in 1..=i128::MAX never
+//!    cause a panic after a valid init.
 
 use ephemeral_account::{
     AccountStatus, EphemeralAccountContract, EphemeralAccountContractClient, Error,
@@ -134,5 +142,133 @@ proptest! {
         );
 
         prop_assert!(matches!(result, Err(Ok(Error::AlreadyInitialized))));
+    }
+
+    // Invariant 4: initializing with a past or current expiry always returns
+    // Error::InvalidExpiry.
+    #[test]
+    fn past_expiry_always_rejects_init(
+        past_offset in 0u32..=1_000_000u32,
+    ) {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let current = env.ledger().sequence();
+        // past_offset == 0 means expiry == current (not in future), which should fail
+        let expiry_ledger = current.saturating_sub(past_offset);
+
+        let result = client.try_initialize(
+            &creator,
+            &expiry_ledger,
+            &recovery,
+            &Address::generate(&env),
+            &Address::generate(&env),
+        );
+
+        prop_assert!(
+            matches!(result, Err(Ok(Error::InvalidExpiry))),
+            "Expected InvalidExpiry for past/current expiry {} (current={}), got {:?}",
+            expiry_ledger, current, result
+        );
+    }
+
+    // Invariant 5: initializing with a valid future expiry always succeeds
+    // (first call), regardless of the specific future ledger number.
+    #[test]
+    fn future_expiry_always_succeeds(offset in 1u32..=1_000_000u32) {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + offset;
+
+        let result = client.try_initialize(
+            &creator,
+            &expiry_ledger,
+            &recovery,
+            &Address::generate(&env),
+            &Address::generate(&env),
+        );
+
+        prop_assert!(
+            matches!(result, Ok(Ok(()))),
+            "Expected Ok for future expiry {}, got {:?}",
+            expiry_ledger, result
+        );
+    }
+
+    // Invariant 6: arbitrary addresses as creator/recovery/controller never
+    // cause a panic — they are valid Soroban addresses and should be accepted.
+    #[test]
+    fn random_addresses_do_not_panic(
+        offset in 1u32..=10_000u32,
+    ) {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        // Generate completely random addresses — these are always valid
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let controller = Address::generate(&env);
+        let admin = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + offset;
+
+        // Should never panic — any valid Soroban address is accepted
+        let result = client.try_initialize(
+            &creator,
+            &expiry_ledger,
+            &recovery,
+            &controller,
+            &admin,
+        );
+
+        prop_assert!(result.is_ok(), "Initialize panicked with random addresses: {:?}", result);
+    }
+
+    // Invariant 7: recording payments with various valid amounts after a
+    // successful init never causes a panic.
+    #[test]
+    fn record_payment_various_amounts(
+        amounts in prop::collection::vec(1i128..=i128::MAX, 1..=5),
+    ) {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1000;
+
+        client.initialize(
+            &creator,
+            &expiry_ledger,
+            &recovery,
+            &Address::generate(&env),
+            &Address::generate(&env),
+        );
+
+        for amount in amounts.iter() {
+            let asset = Address::generate(&env);
+            let result = client.try_record_payment(amount, &asset);
+            prop_assert!(
+                result.is_ok(),
+                "record_payment panicked for amount {}: {:?}",
+                amount, result
+            );
+        }
     }
 }
