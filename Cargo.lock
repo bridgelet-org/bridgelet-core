@@ -9,6 +9,7 @@ dependencies = [
  "bridgelet-shared",
  "ephemeral_account",
  "soroban-sdk",
+ "sweep_controller",
 ]
 
 [[package]]

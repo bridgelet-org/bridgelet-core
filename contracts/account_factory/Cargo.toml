@@ -13,3 +13,4 @@ bridgelet-shared = { path = "../shared", version = "0.1.0" }
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 ephemeral_account = { path = "../ephemeral_account", version = "0.1.0" }
+sweep_controller = { path = "../sweep_controller", version = "0.1.0" }
