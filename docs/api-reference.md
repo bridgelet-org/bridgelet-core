@@ -21,6 +21,7 @@ fn initialize(
     expiry_ledger: u32,
     recovery_address: Address,
     authorized_controller: Address,
+    admin: Address,
 ) -> Result<(), Error>
 ```
 
@@ -29,7 +30,8 @@ fn initialize(
 | `creator` | `Address` | The account that created this contract. Must authorize this call. |
 | `expiry_ledger` | `u32` | Ledger sequence number at which the account expires. Must be in the future. |
 | `recovery_address` | `Address` | Address that receives funds if the account expires without being swept. |
-| `authorized_controller` | `Address` | The `SweepController` contract address authorized to call `sweep()` on behalf of this account. |
+| `authorized_controller` | `Address` | The `SweepController` contract address authorized to call `sweep()` / `sweep_claim()` on behalf of this account. |
+| `admin` | `Address` | Address authorized to perform WASM contract upgrades (`upgrade`). |
 
 **Returns:** `Ok(())` on success.
 
@@ -393,7 +395,7 @@ The nonce is incremented after each successful `execute_sweep` call to prevent r
 
 Gas-free claim path for the recipient. The recipient signs a Soroban auth entry for `claim(recipient, ephemeral_account)` only; a relayer or SDK submits the transaction and pays fees.
 
-Internally the controller uses `authorize_as_current_contract()` to satisfy `authorized_controller.require_auth()` inside `EphemeralAccount::sweep()`.
+Internally the controller validates destination (against `authorized_destination` if set) and uses `authorize_as_current_contract()` to invoke `EphemeralAccount::sweep_claim()`. Note that in flexible mode (`authorized_destination = None`), `claim` relies on `recipient.require_auth()` and does not enforce an Ed25519 signature payload.
 
 ```rust
 fn claim(env: Env, recipient: Address, ephemeral_account: Address) -> Result<(), Error>
@@ -413,6 +415,8 @@ fn claim(env: Env, recipient: Address, ephemeral_account: Address) -> Result<(),
 | `UnauthorizedDestination` | Controller is in locked mode and `recipient` ≠ `authorized_destination`. |
 
 **Auth required:** `recipient.require_auth()`
+
+**Nonce impact:** `claim()` does **not** increment `SweepController`'s `sweep_nonce`.
 
 **Events emitted:** `SweepCompleted { ephemeral_account, destination: recipient, amount }`
 
@@ -434,7 +438,9 @@ fn can_sweep(env: Env, ephemeral_account: Address) -> bool
 
 #### `update_authorized_destination`
 
-Allows the creator to update the locked destination before any sweep has occurred. Fails if a sweep has already been executed (nonce > 0).
+Allows the creator to update the locked destination before any signed sweep has occurred. Checks that `nonce == 0` (returns `AccountAlreadySwept` if `nonce > 0`).
+
+> **Note on Nonce Tracking:** Because `execute_sweep()` increments `nonce` on success while `claim()` does not currently increment `nonce`, this guard specifically tracks whether `execute_sweep()` has been executed. If accounts were swept exclusively via `claim()`, `nonce` remains `0`.
 
 ```rust
 fn update_authorized_destination(env: Env, new_destination: Address) -> Result<(), Error>
@@ -451,7 +457,7 @@ fn update_authorized_destination(env: Env, new_destination: Address) -> Result<(
 | Error | Condition |
 | :--- | :--- |
 | `AuthorizationFailed` | Caller is not the creator or controller is not initialized. |
-| `AccountAlreadySwept` | At least one sweep has been executed (nonce > 0); destination is now immutable. |
+| `AccountAlreadySwept` | At least one signed sweep has been executed (nonce > 0); destination is now immutable. |
 
 **Auth required:** `creator.require_auth()`
 
