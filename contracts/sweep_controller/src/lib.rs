@@ -4,6 +4,8 @@ mod authorization;
 mod errors;
 mod storage;
 mod transfers;
+#[cfg(test)]
+mod test;
 
 mod ephemeral_account_contract {
     soroban_sdk::contractimport!(
