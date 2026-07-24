@@ -9,8 +9,8 @@ mod test {
         ReserveReclaimed,
     };
     use soroban_sdk::{
-        testutils::{Address as _, Ledger as _},
-        Address, BytesN, Env, InvokeError,
+        testutils::{Address as _, Events as _, Ledger as _},
+        Address, BytesN, Env, InvokeError, TryFromVal,
     };
 
     const BASE_RESERVE_STROOPS: i128 = 1_000_000_000;
@@ -409,7 +409,6 @@ mod test {
         assert_eq!(Error::NotExpired as u32, 6);
         assert_eq!(Error::AlreadySwept as u32, 7);
         assert_eq!(Error::Unauthorized as u32, 8);
-        assert_eq!(Error::InvalidSignature as u32, 9);
         assert_eq!(Error::NoPaymentReceived as u32, 10);
         assert_eq!(Error::AccountExpired as u32, 11);
         assert_eq!(Error::InvalidStatus as u32, 12);
@@ -972,5 +971,72 @@ mod test {
         let (payments, error_code) = client.simulate_sweep(&destination);
         assert_eq!(error_code, Error::AccountExpired as u32);
         assert_eq!(payments.len(), 0);
+    }
+
+    #[test]
+    fn test_recovery_sweep_full_lifecycle() {
+        use crate::events::AccountExpired;
+        use soroban_sdk::symbol_short;
+
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register(EphemeralAccountContract, ());
+        let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+        let creator = Address::generate(&env);
+        let recovery = Address::generate(&env);
+        let asset = Address::generate(&env);
+        let expiry_ledger = env.ledger().sequence() + 1;
+
+        client.initialize(
+            &creator,
+            &expiry_ledger,
+            &recovery,
+            &Address::generate(&env),
+            &Address::generate(&env),
+        );
+
+        let recorded_amount: i128 = 42_000_000;
+        client.record_payment(&recorded_amount, &asset);
+
+        assert_eq!(client.get_status(), AccountStatus::PaymentReceived);
+        let info_before = client.get_info();
+        assert!(info_before.payment_received);
+        assert_eq!(info_before.swept_to, None);
+
+        env.ledger().set_sequence_number(expiry_ledger);
+        client.recover(&creator);
+
+        // Check events immediately after recover() — client calls clear the event buffer
+        let events = env.events().all();
+        let mut found_expired = false;
+        for i in 0..events.len() {
+            let (contract, topics, data) = events.get_unchecked(i);
+            let _ = contract;
+            if topics.len() == 0 {
+                continue;
+            }
+            if let Ok(topic_sym) = soroban_sdk::Symbol::try_from_val(&env, &topics.get_unchecked(0))
+            {
+                if topic_sym == symbol_short!("expired") {
+                    let expired_event: AccountExpired =
+                        AccountExpired::try_from_val(&env, &data).unwrap();
+                    assert_eq!(expired_event.recovery_address, recovery);
+                    assert_eq!(expired_event.amount_returned, recorded_amount);
+                    found_expired = true;
+                }
+            }
+        }
+        assert!(found_expired, "expired event not found");
+
+        // Verify state (get_info clears events, so check after event assertions)
+        let info_after = client.get_info();
+        assert_eq!(info_after.status, AccountStatus::Expired);
+        assert_eq!(info_after.swept_to, Some(recovery.clone()));
+        assert_eq!(info_after.payment_count, 1);
+        assert_eq!(info_after.payments.get(0).unwrap().amount, recorded_amount);
+        assert_eq!(client.get_reserve_remaining(), 0);
+        assert!(client.is_reserve_reclaimed());
     }
 }

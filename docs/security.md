@@ -41,13 +41,29 @@ Bridgelet Core uses a layered authorization model:
 *   **Scope**: The creator address must authorize the initialization of an `EphemeralAccount`.
 
 ### 2. Sweep Operations
+
+The system supports two sweep paths, both routed through `SweepController`:
+
+#### 2a. `execute_sweep` — Ed25519 Signature Path
 *   **Mechanism**: Ed25519 Signatures + Soroban Auth
 *   **Flow**:
     1.  Off-chain SDK generates a signature covering `hash(destination + nonce + contract_id)`.
-    2.  Caller invokes `SweepController.execute_sweep`.
+    2.  Caller invokes `SweepController::execute_sweep`.
     3.  `SweepController` verifies the Ed25519 signature against the stored `authorized_signer`.
-    4.  `SweepController` calls `EphemeralAccount.sweep`.
-    5.  `EphemeralAccount` validates its internal state and transitions to `Swept`.
+    4.  `SweepController` increments the nonce to prevent replay.
+    5.  `SweepController` authorizes itself as the invoker of `EphemeralAccount::sweep`.
+    6.  `EphemeralAccount::sweep` validates its internal state, transitions to `Swept`, and reclaims the base reserve.
+*   **When to use**: When the off-chain signer is available to produce a signature. Suitable for automated sweep pipelines.
+
+#### 2b. `claim` — Soroban Auth Path
+*   **Mechanism**: Soroban Authorization Entries
+*   **Flow**:
+    1.  The recipient signs a Soroban auth entry for `SweepController::claim`.
+    2.  Caller (or a relayer) invokes `SweepController::claim(recipient, ephemeral_account)`.
+    3.  `SweepController` validates the destination matches the locked destination (if set).
+    4.  `SweepController` authorizes itself as the invoker of `EphemeralAccount::sweep_claim`.
+    5.  `EphemeralAccount::sweep_claim` validates state, transitions to `Swept`, and reclaims the base reserve.
+*   **When to use**: When the recipient is available to sign a Soroban auth entry directly. Suitable for SDK/integration-driven claims where no off-chain signer is needed.
 
 ### 2a. Claim Operations
 *   **Mechanism**: Soroban Auth (dual authorization)
@@ -81,6 +97,7 @@ The system employs the Checks-Effects-Interactions pattern and leverages Soroban
 ### Critical Implementation Gaps (Current Version)
 1.  **EphemeralAccount Signature Verification**: The `verify_sweep_authorization` function in `EphemeralAccount` is currently a placeholder ("TODO"). **Do not rely on `EphemeralAccount::sweep` directly for security.** Always route sweeps through `SweepController`, which implements proper Ed25519 verification.
 2.  **Token Transfers**: `SweepController` invokes `transfers::execute_transfers` to move tokens from the ephemeral account to the destination after a successful sweep. The transfer logic is fully integrated and active.
+1.  **EphemeralAccount Signature Verification**: The `verify_sweep_authorization` function in `EphemeralAccount` is currently a placeholder. It only checks that the caller is the authorized controller — it does **not** verify the Ed25519 signature bytes. **Do not rely on `EphemeralAccount::sweep` directly for security.** Always route sweeps through `SweepController`, which implements proper Ed25519 verification via `execute_sweep`, or through the `claim` path which uses Soroban auth instead of off-chain signatures.
 
 ### Other Limitations
 *   **Asset Limit**: The `EphemeralAccount` supports recording up to 10 distinct assets.
@@ -89,8 +106,9 @@ The system employs the Checks-Effects-Interactions pattern and leverages Soroban
 
 ## Best Practices for Integrators
 
-1.  **Use SweepController**: Always use `SweepController::execute_sweep` to perform sweeps. Never call `EphemeralAccount::sweep` directly, as it currently lacks active signature verification.
-2.  **Verify Expiry**: When creating accounts, ensure `expiry_ledger` provides enough buffer for network latency and confirmation times.
-3.  **Monitor Events**: Listen for `AccountCreated` and `PaymentReceived` events to trigger off-chain workflows.
-4.  **Key Management**: Securely manage the Ed25519 private key used for generating sweep signatures. Use a hardware security module (HSM) or secure enclave if possible.
-5.  **Recovery**: Monitor for expired accounts and trigger `expire()` to reclaim funds to the recovery address.
+1.  **Use SweepController**: Always use `SweepController` to perform sweeps — either via `execute_sweep` (Ed25519 signature path) or `claim` (Soroban auth path). Never call `EphemeralAccount::sweep` or `EphemeralAccount::sweep_claim` directly.
+2.  **Choose the Right Path**: Use `execute_sweep` when you have an off-chain signer producing Ed25519 signatures. Use `claim` when the recipient can sign a Soroban auth entry directly (e.g., via SDK or wallet integration).
+3.  **Verify Expiry**: When creating accounts, ensure `expiry_ledger` provides enough buffer for network latency and confirmation times.
+4.  **Monitor Events**: Listen for `AccountCreated`, `PaymentReceived`, and `SweepCompleted` events to trigger off-chain workflows.
+5.  **Key Management**: Securely manage the Ed25519 private key used for generating sweep signatures. Use a hardware security module (HSM) or secure enclave if possible.
+6.  **Recovery**: Monitor for expired accounts and trigger `expire()` to reclaim funds to the recovery address.
