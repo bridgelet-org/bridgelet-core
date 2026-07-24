@@ -20,6 +20,11 @@ jobs:
         toolchain: 1.89.0
         target: wasm32v1-none
         override: true
+        # rustfmt + clippy are required by the Check format and Run
+        # clippy steps below; actions-rs/toolchain@v1 only installs
+        # rustc/cargo/rust-std by default.
+        components: rustfmt, clippy
+        profile: minimal
 
     - name: Install soroban-cli
       run: cargo install --locked soroban-cli --version 22.0.0
