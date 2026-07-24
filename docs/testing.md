@@ -82,21 +82,31 @@ cargo test
 
 ### Test Coverage
 
-While Rust doesn't have built-in coverage tools, you can use external tools:
+We use `cargo-llvm-cov` for accurate, LLVM-based coverage reporting. CI generates both LCOV and text reports on every push.
 
 ```bash
-# Install cargo-tarpaulin (coverage tool)
-cargo install cargo-tarpaulin
+# Install cargo-llvm-cov
+cargo install cargo-llvm-cov
 
-# Run with coverage
-cargo tarpaulin --out Html
+# Generate HTML coverage report
+cargo llvm-cov --workspace --html --output-dir coverage
+
+# Generate LCOV report (for CI/CD integration)
+cargo llvm-cov --workspace --lcov --output-path lcov.info
+
+# Quick text summary
+cargo llvm-cov --workspace --text
 ```
+
+**Coverage targets** (before mainnet):
+- Line coverage: ≥ 90%
+- Branch coverage: ≥ 80%
 
 ## Testing Strategy
 
 ### Goals
 
-1. **Unit Test Coverage**: Aim for >90% coverage of all contract functions
+1. **Unit Test Coverage**: Aim for >90% line and >80% branch coverage of all contract functions
 2. **Integration Testing**: Test all cross-contract interactions
 3. **Edge Cases**: Test error conditions, boundary values, and invalid inputs
 4. **State Transitions**: Verify all valid state transitions and prevent invalid ones

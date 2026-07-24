@@ -12,6 +12,13 @@ members = [
 [workspace.dependencies]
 soroban-sdk = "22.0.0"
 
+# Issue #168: cargo-llvm-cov configuration for test coverage reporting.
+[workspace.metadata.llvm-cov]
+# Exclude WASM-only contracts and shared crate from coverage (they need wasm32 target).
+exclude = ["contracts/shared"]
+# Target: ≥90% line coverage, ≥80% branch coverage before mainnet.
+fail-uncovered-functions = 0
+
 [profile.release]
 opt-level = "z"
 overflow-checks = true
