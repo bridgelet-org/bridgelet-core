@@ -19,6 +19,7 @@ members = [
     "contracts/access_controller",
     "contracts/compliance_oracle",
     "contracts/claimable_balance_registry",
+    "contracts/expiry_scheduler",
     "contracts/notification_registry",
 ]
 
