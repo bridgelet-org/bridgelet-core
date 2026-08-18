@@ -21,6 +21,7 @@ members = [
     "contracts/claimable_balance_registry",
     "contracts/expiry_scheduler",
     "contracts/notification_registry",
+    "contracts/escrow_vault",
 ]
 
 # Issues #41 / #42: soroban-sdk is pinned to 22.0.0 in exactly one place — here.
