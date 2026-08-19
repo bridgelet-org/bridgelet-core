@@ -3,6 +3,13 @@
 version = 4
 
 [[package]]
+name = "access_controller"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "account_factory"
 version = "0.1.0"
 dependencies = [
@@ -168,6 +175,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "asset_allowlist"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
+name = "audit_log"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -287,6 +308,20 @@ dependencies = [
  "num-traits",
  "serde",
  "windows-link",
+]
+
+[[package]]
+name = "claimable_balance_registry"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
+name = "compliance_oracle"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
 ]
 
 [[package]]
@@ -620,6 +655,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40404c3f5f511ec4da6fe866ddf6a717c309fdbb69fbbad7b0f3edab8f2e835f"
 
 [[package]]
+name = "expiry_scheduler"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -629,6 +671,14 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 name = "fee_splitter"
 version = "0.1.0"
 dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
+name = "fee_sponsor"
+version = "0.1.0"
+dependencies = [
+ "bridgelet-shared",
  "soroban-sdk",
 ]
 
@@ -932,6 +982,13 @@ dependencies = [
 
 [[package]]
 name = "nonce_registry"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
+name = "notification_registry"
 version = "0.1.0"
 dependencies = [
  "soroban-sdk",

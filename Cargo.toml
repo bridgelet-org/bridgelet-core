@@ -21,6 +21,7 @@ members = [
     "contracts/claimable_balance_registry",
     "contracts/expiry_scheduler",
     "contracts/notification_registry",
+    "contracts/fee_sponsor",
     "contracts/escrow_vault",
 ]
 
