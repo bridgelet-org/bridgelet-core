@@ -55,3 +55,29 @@ pub struct ReserveReclaimed {
     pub fully_reclaimed: bool,
     pub remaining_reserve: i128,
 }
+
+/// Emitted when a sponsor deposits funds.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DepositEvent {
+    pub sponsor: Address,
+    pub amount: i128,
+}
+
+/// Emitted when a sponsorship is created for an account.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SponsorshipCreatedEvent {
+    pub sponsor: Address,
+    pub account: Address,
+    pub cap: i128,
+}
+
+/// Emitted when an account draws sponsored funds.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DrawEvent {
+    pub account: Address,
+    pub amount: i128,
+    pub remaining: i128,
+}

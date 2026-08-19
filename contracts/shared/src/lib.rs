@@ -12,8 +12,8 @@ mod events;
 pub mod interfaces;
 
 pub use events::{
-    AccountCreated, AccountExpired, MultiPaymentReceived, PaymentReceived, ReserveReclaimed,
-    SweepExecutedMulti,
+    AccountCreated, AccountExpired, DepositEvent, DrawEvent, MultiPaymentReceived, PaymentReceived,
+    ReserveReclaimed, SponsorshipCreatedEvent, SweepExecutedMulti,
 };
 
 pub use interfaces::{EphemeralAccountInterface, SweepControllerInterface};
