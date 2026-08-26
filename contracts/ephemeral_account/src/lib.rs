@@ -5,7 +5,7 @@ mod events;
 mod storage;
 mod test;
 
-use soroban_sdk::{contract, contractimpl, xdr::ToXdr, Address, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, symbol_short, xdr::ToXdr, Address, BytesN, Env, Vec};
 
 pub use bridgelet_shared::{
     AccountCreated, AccountExpired, AccountInfo, AccountStatus, EphemeralAccountInterface,
@@ -42,6 +42,7 @@ impl EphemeralAccountContract {
         authorized_controller: Address,
         authorized_signer: BytesN<32>,
         admin: Address,
+        reserve_contract: Option<Address>,
     ) -> Result<(), Error> {
         storage::extend_instance_ttl(&env);
 
@@ -63,6 +64,10 @@ impl EphemeralAccountContract {
             return Err(Error::InvalidExpiry);
         }
 
+        // Resolve the base reserve: prefer the on-chain ReserveContract when
+        // provided, fall back to the compile-time constant otherwise (Issue #405).
+        let base_reserve = Self::resolve_base_reserve(&env, &reserve_contract)?;
+
         // Store initialization data
         storage::set_initialized(&env, true);
         storage::set_creator(&env, &creator);
@@ -72,7 +77,7 @@ impl EphemeralAccountContract {
         storage::set_authorized_controller(&env, &authorized_controller);
         storage::set_authorized_signer(&env, &authorized_signer);
         storage::set_admin(&env, &admin);
-        storage::init_reserve_tracking(&env, BASE_RESERVE_STROOPS);
+        storage::init_reserve_tracking(&env, base_reserve);
 
         // Emit event
         events::emit_account_created(&env, creator, expiry_ledger);
@@ -493,6 +498,38 @@ impl EphemeralAccountContract {
 
     // Private helper functions
 
+    /// Resolve the base reserve amount (in stroops) for this account.
+    ///
+    /// If `reserve_contract` is `Some(addr)`, performs a cross-contract call
+    /// to `ReserveContract::get_base_reserve()` on that address.  When the
+    /// remote contract returns `Some(amount)`, that value is used; when it
+    /// returns `None` (reserve not yet configured), the compile-time default
+    /// is used.
+    ///
+    /// If `reserve_contract` is `None`, the compile-time default
+    /// [`BASE_RESERVE_STROOPS`] is returned directly.
+    ///
+    /// A failing cross-contract call (contract missing, wrong ABI, etc.)
+    /// produces [`Error::ReserveFetchFailed`].
+    fn resolve_base_reserve(
+        env: &Env,
+        reserve_contract: &Option<Address>,
+    ) -> Result<i128, Error> {
+        match reserve_contract {
+            None => Ok(BASE_RESERVE_STROOPS),
+            Some(addr) => {
+                let remote_reserve: Option<i128> = env
+                    .try_invoke_contract(
+                        addr,
+                        &symbol_short!("get_base_reserve"),
+                        &Vec::new(env),
+                    )
+                    .map_err(|_| Error::ReserveFetchFailed)?;
+                Ok(remote_reserve.unwrap_or(BASE_RESERVE_STROOPS))
+            }
+        }
+    }
+
     /// Shared fund-routing state transition used by both `expire` and
     /// `recover`. Marks the account `Expired`, routes funds to the recovery
     /// address, reclaims the base reserve, and emits the expiration event.
@@ -651,6 +688,7 @@ impl EphemeralAccountInterface for EphemeralAccountContract {
         authorized_controller: Address,
         authorized_signer: BytesN<32>,
         admin: Address,
+        reserve_contract: Option<Address>,
     ) -> Result<(), Error> {
         Self::initialize(
             env,
@@ -660,6 +698,7 @@ impl EphemeralAccountInterface for EphemeralAccountContract {
             authorized_controller,
             authorized_signer,
             admin,
+            reserve_contract,
         )
     }
 

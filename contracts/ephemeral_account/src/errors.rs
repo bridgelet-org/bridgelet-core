@@ -26,4 +26,11 @@ pub enum Error {
     DuplicateAsset = 1012,
     TooManyPayments = 1013,
     NotUpgradeAdmin = 1014,
+
+    /// Cross-contract call to ReserveContract failed or returned an
+    /// unexpected type.  The ephemeral account falls back to the
+    /// compile-time default reserve when `reserve_contract` is `None`;
+    /// this error fires only when an explicit address was provided but
+    /// the call itself failed.
+    ReserveFetchFailed = 1015,
 }
