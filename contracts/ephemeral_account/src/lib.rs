@@ -5,7 +5,7 @@ mod events;
 mod storage;
 mod test;
 
-use soroban_sdk::{contract, contractimpl, symbol_short, xdr::ToXdr, Address, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, xdr::ToXdr, Address, BytesN, Env, Vec};
 
 pub use bridgelet_shared::{
     AccountCreated, AccountExpired, AccountInfo, AccountStatus, EphemeralAccountInterface,
@@ -518,13 +518,10 @@ impl EphemeralAccountContract {
         match reserve_contract {
             None => Ok(BASE_RESERVE_STROOPS),
             Some(addr) => {
-                let remote_reserve: Option<i128> = env
-                    .try_invoke_contract(
-                        addr,
-                        &symbol_short!("get_base_reserve"),
-                        &Vec::new(env),
-                    )
-                    .map_err(|_| Error::ReserveFetchFailed)?;
+                use soroban_sdk::Symbol;
+                let func = Symbol::new(env, "get_base_reserve");
+                let remote_reserve: Option<i128> =
+                    env.invoke_contract(addr, &func, Vec::new(env));
                 Ok(remote_reserve.unwrap_or(BASE_RESERVE_STROOPS))
             }
         }

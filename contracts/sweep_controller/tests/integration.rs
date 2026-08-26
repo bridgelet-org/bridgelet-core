@@ -385,6 +385,7 @@ fn test_initialize_with_authorized_destination() {
                     &controller_id,
                     &BytesN::from_array(&env, &[0u8; 32]),
                     &account_creator,
+                    &None::<Address>,
                 )
                     .into_val(&env),
                 sub_invokes: &[],
@@ -644,6 +645,7 @@ fn test_full_lifecycle_multi_asset_claim() {
                     &controller_id,
                     &BytesN::from_array(&env, &[0u8; 32]),
                     &account_creator,
+                    &None::<Address>,
                 )
                     .into_val(&env),
                 sub_invokes: &[],
@@ -830,6 +832,7 @@ fn test_sweep_rejected_when_no_payment_recorded() {
                     &controller_id,
                     &BytesN::from_array(&env, &[0u8; 32]),
                     &account_creator,
+                    &None::<Address>,
                 )
                     .into_val(&env),
                 sub_invokes: &[],
@@ -1074,6 +1077,7 @@ fn test_single_controller_manages_multiple_accounts() {
                         &controller_id,
                         &BytesN::from_array(&env, &[0u8; 32]),
                         &account_creator,
+                        &None::<Address>,
                     )
                         .into_val(&env),
                     sub_invokes: &[],
@@ -1086,6 +1090,7 @@ fn test_single_controller_manages_multiple_accounts() {
                 &controller_id,
                 &BytesN::from_array(&env, &[0u8; 32]),
                 &account_creator,
+                &None::<Address>,
             );
 
         let asset = Address::generate(&env);
@@ -1232,6 +1237,7 @@ fn test_claim_with_flexible_destination() {
                     &controller_id,
                     &BytesN::from_array(&env, &[0u8; 32]),
                     &account_creator,
+                    &None::<Address>,
                 )
                     .into_val(&env),
                 sub_invokes: &[],
@@ -1319,6 +1325,7 @@ fn test_claim_emits_sweep_executed_multi_with_all_assets() {
                     &controller_id,
                     &BytesN::from_array(&env, &[0u8; 32]),
                     &account_creator,
+                    &None::<Address>,
                 )
                     .into_val(&env),
                 sub_invokes: &[],

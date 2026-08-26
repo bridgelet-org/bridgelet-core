@@ -432,8 +432,6 @@ fn test_expire_is_permissionless() {
     let creator = Address::generate(&env);
     let recovery = Address::generate(&env);
     let expiry_ledger = env.ledger().sequence() + 1;
-    let random_caller = Address::generate(&env);
-
     client.initialize(
         &creator,
         &expiry_ledger,
@@ -647,4 +645,145 @@ fn test_recover_returns_invalid_status_when_already_expired() {
     // recover() should fail since already expired
     let result = client.try_recover(&creator);
     assert!(matches!(result, Err(Ok(Error::InvalidStatus))));
+}
+
+// --- Issue #405: cross-contract reserve fetch from ReserveContract ---
+
+const CUSTOM_RESERVE: i128 = 500_000_000; // 50 XLM
+
+/// Helper: deploy and initialize a ReserveContract with the given admin.
+fn setup_reserve_contract(env: &Env) -> (soroban_sdk::Address, reserve_contract::ReserveContractClient<'_>) {
+    let reserve_id = env.register(reserve_contract::ReserveContract, ());
+    let reserve_client = reserve_contract::ReserveContractClient::new(env, &reserve_id);
+    let admin = soroban_sdk::Address::generate(env);
+    reserve_client.initialize(&admin);
+    (admin, reserve_client)
+}
+
+/// When `reserve_contract` is `Some(addr)` and the remote contract has a
+/// configured value, the ephemeral account must use that dynamic value
+/// instead of the compile-time constant.
+#[test]
+fn test_initialize_uses_dynamic_reserve_from_contract() {
+    let env = test_env();    let (_admin, reserve_client) = setup_reserve_contract(&env);
+    reserve_client.set_base_reserve(&CUSTOM_RESERVE);
+    let reserve_id = reserve_client.address.clone();
+
+    let contract_id = env.register(EphemeralAccountContract, ());
+    let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+    let creator = soroban_sdk::Address::generate(&env);
+    let recovery = soroban_sdk::Address::generate(&env);
+    let expiry_ledger = env.ledger().sequence() + 1000;
+
+    client.initialize(
+        &creator,
+        &expiry_ledger,
+        &recovery,
+        &soroban_sdk::Address::generate(&env),
+        &soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+        &soroban_sdk::Address::generate(&env),
+        &Some(reserve_id),
+    );
+
+    assert_eq!(client.get_reserve_remaining(), CUSTOM_RESERVE);
+    assert_eq!(client.get_reserve_available(), CUSTOM_RESERVE);
+}
+
+/// When `reserve_contract` is `Some(addr)` but the remote contract has
+/// not yet called `set_base_reserve`, the ephemeral account falls back
+/// to the compile-time default.
+#[test]
+fn test_initialize_falls_back_when_reserve_not_set() {
+    let env = test_env();
+
+    let (_admin, reserve_client) = setup_reserve_contract(&env);
+    // Do NOT call set_base_reserve — the value is unset.
+
+    let reserve_id = reserve_client.address.clone();
+
+    let contract_id = env.register(EphemeralAccountContract, ());
+    let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+    let creator = soroban_sdk::Address::generate(&env);
+    let recovery = soroban_sdk::Address::generate(&env);
+    let expiry_ledger = env.ledger().sequence() + 1000;
+
+    client.initialize(
+        &creator,
+        &expiry_ledger,
+        &recovery,
+        &soroban_sdk::Address::generate(&env),
+        &soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+        &soroban_sdk::Address::generate(&env),
+        &Some(reserve_id),
+    );
+
+    // Should fall back to the compile-time constant
+    assert_eq!(client.get_reserve_remaining(), BASE_RESERVE_STROOPS);
+    assert_eq!(client.get_reserve_available(), BASE_RESERVE_STROOPS);
+}
+
+/// When `reserve_contract` is `None`, the compile-time constant is used
+/// (same as before Issue #405).
+#[test]
+fn test_initialize_uses_constant_when_no_reserve_contract() {
+    let env = test_env();
+
+    let contract_id = env.register(EphemeralAccountContract, ());
+    let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+    let creator = soroban_sdk::Address::generate(&env);
+    let recovery = soroban_sdk::Address::generate(&env);
+    let expiry_ledger = env.ledger().sequence() + 1000;
+
+    client.initialize(
+        &creator,
+        &expiry_ledger,
+        &recovery,
+        &soroban_sdk::Address::generate(&env),
+        &soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+        &soroban_sdk::Address::generate(&env),
+        &None::<soroban_sdk::Address>,
+    );
+
+    assert_eq!(client.get_reserve_remaining(), BASE_RESERVE_STROOPS);
+    assert_eq!(client.get_reserve_available(), BASE_RESERVE_STROOPS);
+}
+
+/// Sweep reclaims the dynamic reserve amount, not the compile-time constant.
+#[test]
+fn test_sweep_reclaims_dynamic_reserve() {
+    let env = test_env();
+
+    let (_admin, reserve_client) = setup_reserve_contract(&env);
+    reserve_client.set_base_reserve(&CUSTOM_RESERVE);
+    let reserve_id = reserve_client.address.clone();
+
+    let contract_id = env.register(EphemeralAccountContract, ());
+    let client = EphemeralAccountContractClient::new(&env, &contract_id);
+
+    let creator = soroban_sdk::Address::generate(&env);
+    let recovery = soroban_sdk::Address::generate(&env);
+    let asset = soroban_sdk::Address::generate(&env);
+    let destination = soroban_sdk::Address::generate(&env);
+    let expiry_ledger = env.ledger().sequence() + 1000;
+
+    client.initialize(
+        &creator,
+        &expiry_ledger,
+        &recovery,
+        &soroban_sdk::Address::generate(&env),
+        &soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+        &soroban_sdk::Address::generate(&env),
+        &Some(reserve_id),
+    );
+    client.record_payment(&100, &asset);
+
+    client.sweep_claim(&destination);
+
+    let reserve_event = latest_reserve_event(&client);
+    assert_eq!(reserve_event.amount, CUSTOM_RESERVE);
+    assert_eq!(client.get_reserve_remaining(), 0);
+    assert!(client.is_reserve_reclaimed());
 }
