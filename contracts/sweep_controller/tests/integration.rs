@@ -75,6 +75,7 @@ fn setup_ready_account(
                     &controller_id,
                     &BytesN::from_array(&env, &[0u8; 32]),
                     &account_creator,
+                    &None::<Address>,
                 )
                     .into_val(env),
                 sub_invokes: &[],
@@ -87,6 +88,7 @@ fn setup_ready_account(
             &controller_id,
             &BytesN::from_array(&env, &[0u8; 32]),
             &account_creator,
+            &None::<Address>,
         );
 
     let asset_id = Address::generate(&env);
@@ -154,6 +156,7 @@ fn test_execute_sweep_with_valid_signature() {
         &controller_id,
         &BytesN::from_array(&env, &[0u8; 32]),
         &creator,
+        &None::<Address>,
     );
 
     // Create an invalid signature (all zeros - different from valid signature)
@@ -194,6 +197,7 @@ fn test_sweep_without_payment() {
         &controller_id,
         &BytesN::from_array(&env, &[0u8; 32]),
         &account_creator,
+        &None::<Address>,
     );
 
     let asset_id = Address::generate(&env);
@@ -318,6 +322,7 @@ fn test_unauthorized_signer_not_set() {
         &controller_id,
         &BytesN::from_array(&env, &[0u8; 32]),
         &creator,
+        &None::<Address>,
     );
 
     // Record payment
@@ -392,6 +397,7 @@ fn test_initialize_with_authorized_destination() {
             &controller_id,
             &BytesN::from_array(&env, &[0u8; 32]),
             &account_creator,
+            &None::<Address>,
         );
 
     let asset_id = Address::generate(&env);
@@ -513,6 +519,7 @@ fn setup_full_lifecycle(
                     &controller_id,
                     &BytesN::from_array(&env, &[0u8; 32]),
                     &account_creator,
+                    &None::<Address>,
                 )
                     .into_val(env),
                 sub_invokes: &[],
@@ -525,6 +532,7 @@ fn setup_full_lifecycle(
             &controller_id,
             &BytesN::from_array(&env, &[0u8; 32]),
             &account_creator,
+            &None::<Address>,
         );
 
     let asset = Address::generate(env);
@@ -648,6 +656,7 @@ fn test_full_lifecycle_multi_asset_claim() {
             &controller_id,
             &BytesN::from_array(&env, &[0u8; 32]),
             &account_creator,
+            &None::<Address>,
         );
 
     let asset1 = Address::generate(&env);
@@ -705,6 +714,7 @@ fn test_full_expire_flow_funds_to_recovery() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &account_creator,
+        &None::<Address>,
     );
 
     let asset = Address::generate(&env);
@@ -740,6 +750,7 @@ fn test_full_recover_flow_creator_after_expiry() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &account_creator,
+        &None::<Address>,
     );
 
     let asset = Address::generate(&env);
@@ -831,6 +842,7 @@ fn test_sweep_rejected_when_no_payment_recorded() {
             &controller_id,
             &BytesN::from_array(&env, &[0u8; 32]),
             &account_creator,
+            &None::<Address>,
         );
 
     let result = controller_client.try_claim(&recipient, &ephemeral_id);
@@ -899,6 +911,7 @@ fn test_can_sweep_reflects_account_state() {
         &controller_id,
         &BytesN::from_array(&env, &[0u8; 32]),
         &account_creator,
+        &None::<Address>,
     );
 
     // Active with no payment â†’ can_sweep should be false
@@ -939,6 +952,7 @@ fn test_can_sweep_reflects_account_state() {
         &controller_id2,
         &BytesN::from_array(&env, &[0u8; 32]),
         &account_creator2,
+        &None::<Address>,
     );
     ephemeral_client2.record_payment(&100, &Address::generate(&env));
 
@@ -1122,6 +1136,7 @@ fn test_recovery_address_can_expire_account() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &account_creator,
+        &None::<Address>,
     );
 
     let asset = Address::generate(&env);
@@ -1155,6 +1170,7 @@ fn test_get_info_reflects_lifecycle_stages() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &account_creator,
+        &None::<Address>,
     );
 
     // Stage: Active
@@ -1228,6 +1244,7 @@ fn test_claim_with_flexible_destination() {
             &controller_id,
             &BytesN::from_array(&env, &[0u8; 32]),
             &account_creator,
+            &None::<Address>,
         );
 
     let asset = Address::generate(&env);
@@ -1314,6 +1331,7 @@ fn test_claim_emits_sweep_executed_multi_with_all_assets() {
             &controller_id,
             &BytesN::from_array(&env, &[0u8; 32]),
             &account_creator,
+            &None::<Address>,
         );
 
     let asset1 = Address::generate(&env);

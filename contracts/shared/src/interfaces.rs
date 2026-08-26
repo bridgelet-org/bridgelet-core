@@ -22,6 +22,7 @@ pub trait EphemeralAccountInterface {
         authorized_controller: Address,
         authorized_signer: BytesN<32>,
         admin: Address,
+        reserve_contract: Option<Address>,
     ) -> Result<(), Self::Error>;
 
     /// Record an inbound payment to this account.

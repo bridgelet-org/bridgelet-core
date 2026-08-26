@@ -52,6 +52,7 @@ fn setup_controller_and_account(
         &controller_id,
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
 
     let asset = Address::generate(env);
@@ -89,6 +90,7 @@ fn test_sweep_executed_multi_event_includes_all_fields() {
         &Address::generate(&env), // controller (not used for direct sweep)
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
 
     ephemeral_client.record_payment(&100, &asset1);
@@ -142,6 +144,7 @@ fn test_sweep_event_records_payment_amounts() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
     client.record_payment(&777, &asset);
 
@@ -217,6 +220,7 @@ fn test_sweep_account_not_ready_without_payment() {
         &controller_id,
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
     // No record_payment called
 
@@ -263,6 +267,7 @@ fn test_can_sweep_returns_false_without_payment() {
         &controller_id,
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
     // No payment recorded — account is not sweepable yet
     assert!(!controller_client.can_sweep(&ephemeral_id));
@@ -308,6 +313,7 @@ fn test_claim_rejects_unauthorized_recipient() {
             &controller_id,
             &BytesN::from_array(&env, &[0u8; 32]),
             &Address::generate(&env),
+            &None::<Address>,
         );
         let asset = Address::generate(&env);
         env.mock_all_auths_allowing_non_root_auth();
@@ -348,6 +354,7 @@ fn test_atomic_sweep_reverts_on_invalid_state() {
         &controller_id,
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
     // No payment recorded — sweep should fail atomically
 

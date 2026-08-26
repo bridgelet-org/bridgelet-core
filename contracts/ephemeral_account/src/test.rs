@@ -47,6 +47,7 @@ fn test_initialize() {
         &controller,
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
 
     assert_eq!(client.get_status(), AccountStatus::Active);
@@ -76,6 +77,7 @@ fn test_record_payment() {
         &controller,
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
     client.record_payment(&100, &asset);
 
@@ -103,6 +105,7 @@ fn test_multiple_payments() {
         &controller,
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
 
     client.record_payment(&100, &asset1);
@@ -137,6 +140,7 @@ fn test_sweep_single_asset() {
         &controller,
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
     client.record_payment(&100, &asset);
 
@@ -174,6 +178,7 @@ fn test_duplicate_asset_returns_expected_error_code() {
         &controller,
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
     client.record_payment(&100, &asset);
     let result = client.try_record_payment(&50, &asset);
@@ -199,6 +204,7 @@ fn test_too_many_assets_returns_expected_error_code() {
         &controller,
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
 
     for i in 0..10 {
@@ -242,6 +248,7 @@ fn test_record_payment_returns_invalid_amount_error() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
     let result = client.try_record_payment(&0, &asset);
 
@@ -265,6 +272,7 @@ fn test_expire_returns_not_expired_error() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
 
     let result = client.try_expire();
@@ -291,6 +299,7 @@ fn test_sweep_returns_already_swept_error() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
     client.record_payment(&100, &asset);
 
@@ -319,6 +328,7 @@ fn test_sweep_claim_authorized_controller_succeeds() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
     client.record_payment(&100, &asset);
 
@@ -351,6 +361,7 @@ fn test_sweep_after_expiry_is_rejected() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
     client.record_payment(&100, &asset);
 
@@ -376,6 +387,7 @@ fn test_initialize_requires_creator_authorization() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
 
     assert!(result.is_err());
@@ -400,6 +412,7 @@ fn test_expire_succeeds_after_expiry_ledger() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
 
     // Move past expiry
@@ -428,6 +441,7 @@ fn test_expire_is_permissionless() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
 
     // Move past expiry
@@ -461,6 +475,7 @@ fn test_expire_returns_invalid_status_when_already_swept() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
     client.record_payment(&100, &asset);
     client.sweep_claim(&destination);
@@ -486,6 +501,7 @@ fn test_expire_returns_invalid_status_when_already_expired() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
 
     env.ledger().set_sequence_number(expiry_ledger);
@@ -515,6 +531,7 @@ fn test_recover_succeeds_for_creator() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
 
     env.ledger().set_sequence_number(expiry_ledger);
@@ -542,6 +559,7 @@ fn test_recover_succeeds_for_recovery_address() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
 
     env.ledger().set_sequence_number(expiry_ledger);
@@ -570,6 +588,7 @@ fn test_recover_rejects_unauthorized_caller() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
 
     env.ledger().set_sequence_number(expiry_ledger);
@@ -595,6 +614,7 @@ fn test_recover_returns_not_expired_before_expiry() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
 
     let result = client.try_recover(&creator);
@@ -618,6 +638,7 @@ fn test_recover_returns_invalid_status_when_already_expired() {
         &Address::generate(&env),
         &BytesN::from_array(&env, &[0u8; 32]),
         &Address::generate(&env),
+        &None::<Address>,
     );
 
     env.ledger().set_sequence_number(expiry_ledger);
