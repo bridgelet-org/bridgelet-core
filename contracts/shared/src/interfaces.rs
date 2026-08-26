@@ -14,6 +14,7 @@ pub trait EphemeralAccountInterface {
     type Error;
 
     /// Initialize the ephemeral account with its restrictions.
+    #[allow(clippy::too_many_arguments)]
     fn initialize(
         env: Env,
         creator: Address,

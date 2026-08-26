@@ -1,4 +1,9 @@
 #![no_std]
+// Issue #405: `initialize` now accepts `reserve_contract: Option<Address>` (8 args).
+// The `#[contractimpl]` macro mirrors this on the generated Client, so the
+// crate-level allow is required to suppress clippy's `too_many_arguments` lint
+// on the generated code.
+#![allow(clippy::too_many_arguments)]
 
 mod errors;
 mod events;
@@ -34,6 +39,7 @@ impl EphemeralAccountContract {
     ///
     /// # Errors
     /// Returns Error::AlreadyInitialized if called more than once
+    #[allow(clippy::too_many_arguments)]
     pub fn initialize(
         env: Env,
         creator: Address,
