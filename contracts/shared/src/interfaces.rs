@@ -30,7 +30,8 @@ pub trait EphemeralAccountInterface {
 
     /// Sweep funds to `destination`. `auth_signature` is verified against the
     /// stored authorized signer's Ed25519 public key.
-    fn sweep(env: Env, destination: Address, auth_signature: BytesN<64>) -> Result<(), Self::Error>;
+    fn sweep(env: Env, destination: Address, auth_signature: BytesN<64>)
+        -> Result<(), Self::Error>;
 
     /// Gas-free sweep path used by the sweep controller's claim flow.
     fn sweep_claim(env: Env, destination: Address) -> Result<(), Self::Error>;

@@ -511,17 +511,13 @@ impl EphemeralAccountContract {
     ///
     /// A failing cross-contract call (contract missing, wrong ABI, etc.)
     /// produces [`Error::ReserveFetchFailed`].
-    fn resolve_base_reserve(
-        env: &Env,
-        reserve_contract: &Option<Address>,
-    ) -> Result<i128, Error> {
+    fn resolve_base_reserve(env: &Env, reserve_contract: &Option<Address>) -> Result<i128, Error> {
         match reserve_contract {
             None => Ok(BASE_RESERVE_STROOPS),
             Some(addr) => {
                 use soroban_sdk::Symbol;
                 let func = Symbol::new(env, "get_base_reserve");
-                let remote_reserve: Option<i128> =
-                    env.invoke_contract(addr, &func, Vec::new(env));
+                let remote_reserve: Option<i128> = env.invoke_contract(addr, &func, Vec::new(env));
                 Ok(remote_reserve.unwrap_or(BASE_RESERVE_STROOPS))
             }
         }

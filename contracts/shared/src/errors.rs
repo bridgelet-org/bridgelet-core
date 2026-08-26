@@ -54,7 +54,11 @@ mod tests {
         let mut sorted = codes;
         sorted.sort();
         sorted.dedup();
-        assert_eq!(sorted.len(), codes.len(), "duplicate SharedError discriminant");
+        assert_eq!(
+            sorted.len(),
+            codes.len(),
+            "duplicate SharedError discriminant"
+        );
     }
 
     #[test]

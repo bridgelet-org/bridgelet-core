@@ -43,9 +43,6 @@ fn test_full_pipeline_create_via_factory_fund_and_sweep() {
     let factory_id = env.register(AccountFactory, ());
     let factory_client = AccountFactoryClient::new(&env, &factory_id);
 
-
-
-    
     let factory_creator = Address::generate(&env);
     let wasm_hash = env
         .deployer()

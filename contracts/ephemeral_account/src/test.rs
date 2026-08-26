@@ -652,7 +652,12 @@ fn test_recover_returns_invalid_status_when_already_expired() {
 const CUSTOM_RESERVE: i128 = 500_000_000; // 50 XLM
 
 /// Helper: deploy and initialize a ReserveContract with the given admin.
-fn setup_reserve_contract(env: &Env) -> (soroban_sdk::Address, reserve_contract::ReserveContractClient<'_>) {
+fn setup_reserve_contract(
+    env: &Env,
+) -> (
+    soroban_sdk::Address,
+    reserve_contract::ReserveContractClient<'_>,
+) {
     let reserve_id = env.register(reserve_contract::ReserveContract, ());
     let reserve_client = reserve_contract::ReserveContractClient::new(env, &reserve_id);
     let admin = soroban_sdk::Address::generate(env);
@@ -665,7 +670,8 @@ fn setup_reserve_contract(env: &Env) -> (soroban_sdk::Address, reserve_contract:
 /// instead of the compile-time constant.
 #[test]
 fn test_initialize_uses_dynamic_reserve_from_contract() {
-    let env = test_env();    let (_admin, reserve_client) = setup_reserve_contract(&env);
+    let env = test_env();
+    let (_admin, reserve_client) = setup_reserve_contract(&env);
     reserve_client.set_base_reserve(&CUSTOM_RESERVE);
     let reserve_id = reserve_client.address.clone();
 
