@@ -95,6 +95,7 @@ Verifies that `reclaim_reserve()` returns `0` and emits a no-op event when calle
 | `AlreadySwept` guard | Status check at entry of `sweep()` | Direct replay and reentrant `sweep()` calls |
 | `AlreadySwept` guard (indirect) | A second `sweep()` is blocked even when an attacker injects a `record_payment` between attempts | `record_payment`-then-`sweep` replay pattern (issue #239) |
 | Reserve idempotency | `reclaim_reserve()` returns 0 when fully reclaimed | Reserve double-claim |
+| **No direct record_payment guard** | `record_payment` has no `require_auth()` and does not check `AccountStatus` | **NOT covered** — see note below |
 
 The combination of Soroban's execution model and the contract's CEI pattern means
 **reentrancy cannot drain an already-swept account**. `record_payment` itself is

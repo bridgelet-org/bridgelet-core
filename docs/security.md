@@ -56,22 +56,16 @@ The system supports two sweep paths, both routed through `SweepController`:
 *   **When to use**: When the off-chain signer is available to produce a signature. Suitable for automated sweep pipelines.
 
 #### 2b. `claim` — Soroban Auth Path
-*   **Mechanism**: Soroban Authorization Entries
+*   **Mechanism**: Soroban Authorization Entries (dual authorization)
 *   **Flow**:
     1.  The recipient signs a Soroban auth entry for `SweepController::claim`.
     2.  Caller (or a relayer) invokes `SweepController::claim(recipient, ephemeral_account)`.
-    3.  `SweepController` validates the destination matches the locked destination (if set).
-    4.  `SweepController` authorizes itself as the invoker of `EphemeralAccount::sweep_claim`.
-    5.  `EphemeralAccount::sweep_claim` validates state, transitions to `Swept`, and reclaims the base reserve.
+    3.  `recipient.require_auth()` ensures the recipient authorizes the claim.
+    4.  `SweepController` increments the sweep nonce to prevent replay and lock the destination.
+    5.  `SweepController` validates the destination matches the locked destination (if set).
+    6.  `SweepController` builds a Soroban auth entry authorizing itself as the invoker of `sweep_claim` on the ephemeral account (`authorize_as_current_contract`).
+    7.  `EphemeralAccount::sweep_claim` is called, which verifies the Soroban auth entries, validates state, transitions to `Swept`, and reclaims the base reserve.
 *   **When to use**: When the recipient is available to sign a Soroban auth entry directly. Suitable for SDK/integration-driven claims where no off-chain signer is needed.
-
-### 2a. Claim Operations
-*   **Mechanism**: Soroban Auth (dual authorization)
-*   **Flow**:
-    1.  Caller invokes `SweepController.claim` with `recipient` and `ephemeral_account`.
-    2.  `recipient.require_auth()` ensures the recipient authorizes the claim.
-    3.  `SweepController` builds a Soroban auth entry authorizing itself as the invoker of `sweep_claim` on the ephemeral account (`authorize_as_current_contract`).
-    4.  `EphemeralAccount.sweep_claim` is called, which verifies the Soroban auth entries and transitions the account to `Swept`.
 *   **Note**: This path does not use Ed25519 signatures. Instead, both the recipient and the controller contract must provide Soroban authorization, enabling a relayer/SDK to submit the transaction while the recipient only signs the authorization payload.
 
 ### 3. Expiration
