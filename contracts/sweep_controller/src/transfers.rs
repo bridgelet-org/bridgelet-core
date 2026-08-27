@@ -56,11 +56,15 @@ pub fn execute_transfers(
     }
 
     // ── Execute transfers ──────────────────────────────────────────────
-    // Each transfer() call delegates to the SEP-41 token contract.
-    // If any fails, Soroban rolls back the entire transaction atomically.
+    // Use try_transfer (the Result-returning variant) so that per-asset
+    // failures are surfaced as Error::TransferFailed rather than panicking
+    // the entire transaction opaquely.  Callers doing a soft/simulated
+    // sweep attempt can observe which asset failed. (#414)
     for payment in payments.iter() {
         let token = TokenClient::new(env, &payment.asset);
-        token.transfer(from, destination, &payment.amount);
+        token
+            .try_transfer(from, destination, &payment.amount)
+            .map_err(|_| Error::TransferFailed)?;
     }
 
     Ok(())

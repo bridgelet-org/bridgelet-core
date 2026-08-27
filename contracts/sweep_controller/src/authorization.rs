@@ -137,9 +137,23 @@ fn validate_signature_length(signature: &BytesN<64>) -> Result<(), Error> {
 ///
 /// 5. **Ed25519 verification** — `env.crypto().ed25519_verify()` performs
 ///    constant-time comparison of the signature against the public key and
-///    message hash.  It returns `()` on success or panics on failure.
-///    We do *not* catch the panic here because a failed signature check
-///    should abort the entire transaction (no partial state changes).
+///    message hash.  **On failure it panics (aborts the transaction), it
+///    does NOT return an error.** We do *not* catch the panic here because
+///    a failed signature check should abort the entire transaction (no
+///    partial state changes).
+///
+/// ## Return type caveat
+///
+/// This function returns `Result<(), Error>` for ergonomics, but in
+/// practice it can only return:
+/// - `Ok(())` — signature valid
+/// - `Err(AuthorizedSignerNotSet)` — signer key not configured
+/// - `Err(InvalidSignature)` — format validation failed
+///
+/// A bad Ed25519 signature will **panic** via `ed25519_verify()` rather
+/// than producing `Err(AuthorizationFailed)` or `Err(SignatureVerificationFailed)`.
+/// Callers that need to observe signature failures as typed errors should
+/// use a try-call wrapper or handle the panic at the transaction level. (#411)
 ///
 /// ## No hardcoded keys
 ///
