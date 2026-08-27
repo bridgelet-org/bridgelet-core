@@ -140,6 +140,15 @@ impl SweepController {
 
         recipient.require_auth();
         Self::validate_destination(&env, &recipient)?;
+
+        // Increment the sweep nonce so that update_authorized_destination's
+        // lock condition reflects sweeps from both code paths (claim and
+        // execute_sweep).  Without this, claim() could be called any number
+        // of times and update_authorized_destination() would still see nonce
+        // == 0, allowing the destination to be changed after funds have
+        // already been swept.  (#410)
+        authorization::increment_nonce(&env);
+
         Self::authorize_claim(&env, &ephemeral_account, &recipient)?;
 
         let account_client = EphemeralAccountClient::new(&env, &ephemeral_account);

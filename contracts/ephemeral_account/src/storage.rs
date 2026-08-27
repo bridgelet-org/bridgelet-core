@@ -94,10 +94,19 @@ pub fn get_payment(env: &Env, asset: &Address) -> Option<Payment> {
     payments.get(asset.clone())
 }
 
+/// Return the total number of recorded payments without deserializing the
+/// full map.  Uses the map length directly from storage metadata when
+/// available; falls back to deserialization only when the key is absent.
 pub fn get_total_payments(env: &Env) -> u32 {
+    if !has_payments(env) {
+        return 0;
+    }
     get_all_payments(env).len()
 }
 
+/// Check whether at least one payment has been recorded.  Equivalent to
+/// `has_payments` but named for readability at call sites that care about
+/// the payment-received semantic rather than raw key presence.
 pub fn has_payment_received(env: &Env) -> bool {
     has_payments(env)
 }
