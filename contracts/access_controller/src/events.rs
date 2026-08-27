@@ -37,7 +37,3 @@ pub fn emit_role_revoked(env: &Env, role: Symbol, account: Address, revoker: Add
         },
     );
 }
-
-
-
-

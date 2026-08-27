@@ -41,8 +41,3 @@ pub fn remove_role(env: &Env, role: &Symbol, account: &Address) {
     let key = DataKey::Role(role.clone(), account.clone());
     env.storage().persistent().remove(&key);
 }
-
-
-
-
-

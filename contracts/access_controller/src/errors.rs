@@ -9,7 +9,3 @@ pub enum Error {
     Unauthorized = 10002,
     CannotRevokeSuperAdmin = 10003,
 }
-
-
-
-
