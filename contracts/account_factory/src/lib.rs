@@ -7,6 +7,22 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Ve
 pub mod errors;
 pub use crate::errors::Error;
 
+/// Minimum remaining TTL (in ledgers) before the instance storage is
+/// proactively extended.  Matches the threshold used by the other
+/// contracts in this workspace.
+const INSTANCE_TTL_THRESHOLD: u32 = 100;
+
+/// Target TTL (in ledgers) after extension.  ~30 days at 5 s/ledger.
+const INSTANCE_TTL_EXTEND_TO: u32 = 518_400;
+
+/// Extend instance storage TTL so the factory's stored WASM hash and
+/// batch nonce remain accessible across long idle periods. (#427)
+fn extend_instance_ttl(env: &Env) {
+    env.storage()
+        .instance()
+        .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND_TO);
+}
+
 #[contract]
 pub struct AccountFactory;
 
@@ -33,6 +49,10 @@ impl AccountFactory {
         creator: Address,
         ephemeral_account_wasm_hash: BytesN<32>,
     ) -> Result<(), Error> {
+        // Extend TTL on every call so the factory's instance storage
+        // (WASM hash, batch nonce) survives long idle periods. (#427)
+        extend_instance_ttl(&env);
+
         // State check fires BEFORE require_auth so a double-init attempt from
         // any caller is rejected without paying the cost of an auth entry.
         if env
@@ -80,6 +100,10 @@ impl AccountFactory {
         creator: Address,
         requests: Vec<AccountInitRequest>,
     ) -> Vec<AccountInitResult> {
+        // Extend TTL on every call so the factory's instance storage
+        // (WASM hash, batch nonce) survives long idle periods. (#427)
+        extend_instance_ttl(&env);
+
         creator.require_auth();
 
         let wasm_hash = env
