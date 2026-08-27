@@ -64,6 +64,7 @@ proptest! {
             &controller,
             &BytesN::from_array(&env, &[0u8; 32]),
             &Address::generate(&env),
+            &None::<Address>,
         );
 
         for amount in amounts.iter() {
@@ -107,6 +108,7 @@ proptest! {
             &controller,
             &BytesN::from_array(&env, &[0u8; 32]),
             &Address::generate(&env),
+            &None::<Address>,
         );
         client.record_payment(&amount, &asset);
 
@@ -140,6 +142,7 @@ proptest! {
             &Address::generate(&env),
             &BytesN::from_array(&env, &[0u8; 32]),
             &Address::generate(&env),
+            &None::<Address>,
         );
 
         let result = client.try_initialize(
@@ -149,6 +152,7 @@ proptest! {
             &Address::generate(&env),
             &BytesN::from_array(&env, &[0u8; 32]),
             &Address::generate(&env),
+            &None::<Address>,
         );
 
         prop_assert!(matches!(result, Err(Ok(Error::AlreadyInitialized))));
@@ -178,6 +182,7 @@ proptest! {
             &Address::generate(&env),
             &BytesN::from_array(&env, &[0u8; 32]),
             &Address::generate(&env),
+            &None::<Address>,
         );
 
         prop_assert!(
@@ -207,6 +212,7 @@ proptest! {
             &Address::generate(&env),
             &BytesN::from_array(&env, &[0u8; 32]),
             &Address::generate(&env),
+            &None::<Address>,
         );
 
         prop_assert!(
@@ -242,6 +248,7 @@ proptest! {
             &controller,
             &BytesN::from_array(&env, &[0u8; 32]),
             &admin,
+            &None::<Address>,
         );
 
         prop_assert!(result.is_ok(), "Initialize panicked with random addresses: {:?}", result);
@@ -270,6 +277,7 @@ proptest! {
             &Address::generate(&env),
             &signer,
             &Address::generate(&env),
+            &None::<Address>,
         );
 
         for amount in amounts.iter() {

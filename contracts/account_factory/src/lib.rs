@@ -167,6 +167,9 @@ impl AccountFactory {
                     &env,
                     "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
                 ),
+                // No reserve_contract — factory-created accounts use the
+                // compile-time default base reserve (Issue #405).
+                &None::<Address>,
             ) {
                 Ok(_) => AccountInitResult {
                     account_address: account_address.clone(),

@@ -129,11 +129,11 @@ mod tests {
 
     #[test]
     fn convenience_helpers_return_expected_variants() {
-        assert_eq!(
-            StorageKey::key_initialized(),
-            StorageKey::Initialized
-        );
+        assert_eq!(StorageKey::key_initialized(), StorageKey::Initialized);
         assert_eq!(StorageKey::key_creator(), StorageKey::Creator);
-        assert_eq!(StorageKey::key_storage_version(), StorageKey::StorageVersion);
+        assert_eq!(
+            StorageKey::key_storage_version(),
+            StorageKey::StorageVersion
+        );
     }
 }

@@ -28,7 +28,10 @@ fn hash_passphrase(env: &Env, passphrase: &str) -> soroban_sdk::BytesN<32> {
 /// ```ignore
 /// passphrase::require_network(&env, passphrase::TESTNET_PASSPHRASE)?;
 /// ```
-pub fn require_network(env: &Env, expected_passphrase: &str) -> Result<(), soroban_sdk::BytesN<32>> {
+pub fn require_network(
+    env: &Env,
+    expected_passphrase: &str,
+) -> Result<(), soroban_sdk::BytesN<32>> {
     let actual = env.ledger().network_id();
     let expected = hash_passphrase(env, expected_passphrase);
     if actual == expected {

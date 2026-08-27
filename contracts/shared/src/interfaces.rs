@@ -14,6 +14,7 @@ pub trait EphemeralAccountInterface {
     type Error;
 
     /// Initialize the ephemeral account with its restrictions.
+    #[allow(clippy::too_many_arguments)]
     fn initialize(
         env: Env,
         creator: Address,
@@ -22,6 +23,7 @@ pub trait EphemeralAccountInterface {
         authorized_controller: Address,
         authorized_signer: BytesN<32>,
         admin: Address,
+        reserve_contract: Option<Address>,
     ) -> Result<(), Self::Error>;
 
     /// Record an inbound payment to this account.
@@ -29,7 +31,8 @@ pub trait EphemeralAccountInterface {
 
     /// Sweep funds to `destination`. `auth_signature` is verified against the
     /// stored authorized signer's Ed25519 public key.
-    fn sweep(env: Env, destination: Address, auth_signature: BytesN<64>) -> Result<(), Self::Error>;
+    fn sweep(env: Env, destination: Address, auth_signature: BytesN<64>)
+        -> Result<(), Self::Error>;
 
     /// Gas-free sweep path used by the sweep controller's claim flow.
     fn sweep_claim(env: Env, destination: Address) -> Result<(), Self::Error>;
