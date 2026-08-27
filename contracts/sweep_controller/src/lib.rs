@@ -294,9 +294,11 @@ impl SweepController {
 
         let account_client = EphemeralAccountClient::new(&env, &ephemeral_account);
 
+        // Single cross-contract call: get_info() now includes is_expired,
+        // so we don't need a separate is_expired() invocation. (#416)
         let info = account_client.get_info();
 
-        info.status as u32 == AccountStatus::PaymentReceived as u32 && !account_client.is_expired()
+        info.status as u32 == AccountStatus::PaymentReceived as u32 && !info.is_expired
     }
 
     /// Return the current sweep nonce for this controller.

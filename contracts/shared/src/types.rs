@@ -31,6 +31,11 @@ pub struct AccountInfo {
     pub payment_count: u32,
     pub payments: Vec<Payment>,
     pub swept_to: Option<Address>,
+    /// Whether the account has passed its expiry ledger.  Included so
+    /// consumers (e.g. `SweepController::can_sweep`) can answer the
+    /// sweep-readiness question in a single cross-contract call instead
+    /// of calling `get_info()` + `is_expired()` separately. (#416)
+    pub is_expired: bool,
 }
 
 #[contracttype]

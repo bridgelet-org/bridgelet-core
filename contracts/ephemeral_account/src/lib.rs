@@ -397,6 +397,7 @@ impl EphemeralAccountContract {
                 payments_vec
             },
             swept_to: storage::get_swept_to(&env),
+            is_expired: Self::is_expired(env.clone()),
         })
     }
 
