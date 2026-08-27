@@ -225,3 +225,106 @@ fn test_batch_initialize_keeps_nonce_monotonic_across_more_invocations() {
     }
     assert_unique_addresses(&addresses);
 }
+
+// ── Issue #425: Error serialization in batch_initialize results ─────────────
+
+/// When try_initialize fails, the error field of AccountInitResult must
+/// carry the serialized error code rather than None. (#425)
+#[test]
+fn test_batch_initialize_serializes_error_on_failure() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (wasm_hash, _template) = register_template(&env);
+    let factory_id = env.register(AccountFactory, ());
+    let client = AccountFactoryClient::new(&env, &factory_id);
+
+    let creator = Address::generate(&env);
+    client.initialize(&creator, &wasm_hash);
+
+    // Build a request with an expiry_ledger in the past so try_initialize
+    // returns Err(Ok(Error::InvalidExpiry)).
+    let past_expiry = env.ledger().sequence() - 1;
+    let mut reqs = Vec::new(&env);
+    reqs.push_back(AccountInitRequest {
+        expiry_ledger: past_expiry,
+        recovery_address: Address::generate(&env),
+    });
+
+    let results = client.batch_initialize(&creator, &reqs);
+    assert_eq!(results.len(), 1);
+
+    let r = results.get(0).unwrap();
+    assert!(!r.success, "request with past expiry should fail");
+    assert!(
+        r.error.is_some(),
+        "error field must be populated for failed init"
+    );
+
+    // The serialized error is 4 bytes big-endian u32.  Decode it and
+    // verify it matches ephemeral_account::Error::InvalidExpiry (1004).
+    let err_bytes = r.error.as_ref().unwrap();
+    assert_eq!(err_bytes.len(), 4);
+    let code = ((err_bytes.get(0) as u32) << 24)
+        | ((err_bytes.get(1) as u32) << 16)
+        | ((err_bytes.get(2) as u32) << 8)
+        | (err_bytes.get(3) as u32);
+    assert_eq!(
+        code,
+        ephemeral_account::Error::InvalidExpiry as u32,
+        "serialized error code should match ephemeral_account::Error::InvalidExpiry"
+    );
+}
+
+/// Successful results must still carry error: None. (#425)
+#[test]
+fn test_batch_initialize_success_has_no_error() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (wasm_hash, _template) = register_template(&env);
+    let factory_id = env.register(AccountFactory, ());
+    let client = AccountFactoryClient::new(&env, &factory_id);
+
+    let creator = Address::generate(&env);
+    client.initialize(&creator, &wasm_hash);
+
+    let (_expiry, requests) = build_requests(&env, 2);
+    let results = client.batch_initialize(&creator, &requests);
+
+    for (i, r) in results.iter().enumerate() {
+        assert!(r.success, "request {i} should succeed");
+        assert!(r.error.is_none(), "successful request {i} should have no error");
+    }
+}
+
+/// batch_initialize can be called multiple times without collision. (#423)
+#[test]
+fn test_batch_initialize_multiple_calls_succeed() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (wasm_hash, _template) = register_template(&env);
+    let factory_id = env.register(AccountFactory, ());
+    let client = AccountFactoryClient::new(&env, &factory_id);
+
+    let creator = Address::generate(&env);
+    client.initialize(&creator, &wasm_hash);
+
+    // Three separate batch calls, each with 2 requests.
+    let mut all_addresses: std::vec::Vec<Address> = std::vec::Vec::new();
+    for batch in 0..3 {
+        let (_expiry, requests) = build_requests(&env, 2);
+        let results = client.batch_initialize(&creator, &requests);
+        assert_eq!(results.len(), 2, "batch {batch} should return 2 results");
+        for (i, r) in results.iter().enumerate() {
+            assert!(
+                r.success,
+                "batch {batch} request {i} should succeed"
+            );
+            all_addresses.push(r.account_address.clone());
+        }
+    }
+    // All 6 addresses across 3 batches must be unique.
+    assert_unique_addresses(&all_addresses);
+}

@@ -2,7 +2,7 @@
 
 use bridgelet_shared::{AccountInitRequest, AccountInitResult};
 use ephemeral_account::EphemeralAccountContractClient as EphemeralAccountClient;
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Bytes, BytesN, Env, Vec};
 
 pub mod errors;
 pub use crate::errors::Error;
@@ -149,12 +149,28 @@ impl AccountFactory {
                     success: true,
                     error: None,
                 },
-                Err(_) => AccountInitResult {
-                    account_address: account_address.clone(),
-                    success: false,
-                    error: None, // In a real implementation, we'd serialize errors
-                },
-            };
+                Err(err) => {
+                    // Serialize the error code so callers can distinguish
+                    // failure reasons instead of seeing a bare None. (#425)
+                    //
+                    // try_initialize returns Result<Result<(), ContractError>,
+                    // InvokeError>.  Contract errors carry a u32 discriminant;
+                    // host/invocation errors are opaque and encoded as 0xFFFF_FFFF.
+                    let error_code: u32 = match err {
+                        Ok(contract_err) => contract_err as u32,
+                        Err(_) => 0xFFFF_FFFF,
+                    };
+                    let mut error_bytes = Bytes::new(&env);
+                    error_bytes.push_back(((error_code >> 24) & 0xFF) as u8);
+                    error_bytes.push_back(((error_code >> 16) & 0xFF) as u8);
+                    error_bytes.push_back(((error_code >> 8) & 0xFF) as u8);
+                    error_bytes.push_back((error_code & 0xFF) as u8);
+                    AccountInitResult {
+                        account_address: account_address.clone(),
+                        success: false,
+                        error: Some(error_bytes),
+                    }
+                }
 
             results.push_back(result);
         }
