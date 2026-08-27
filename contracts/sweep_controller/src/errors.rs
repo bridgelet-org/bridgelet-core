@@ -14,6 +14,13 @@ pub enum Error {
     TransferFailed = 2001,
     /// Signature verification failed — the signature does not match the
     /// authorized signer's public key for the given message.
+    ///
+    /// NOTE: Despite its name, this variant is currently only reachable
+    /// for high-level auth logic errors (e.g. "not yet initialized" /
+    /// "no creator set").  True Ed25519 signature failures panic via
+    /// `env.crypto().ed25519_verify()` rather than returning this
+    /// variant.  Retained for backward compatibility with off-chain
+    /// error-code consumers. (#412)
     AuthorizationFailed = 2002,
     /// The source account does not hold sufficient balance of the token
     /// being transferred.
@@ -33,13 +40,27 @@ pub enum Error {
     /// The cryptographic signature verification primitive returned a
     /// failure (distinct from `AuthorizationFailed` which covers
     /// higher-level auth logic errors).
+    ///
+    /// NOTE: Currently unreachable — `env.crypto().ed25519_verify()`
+    /// panics on failure rather than returning a Result.  This variant
+    /// is retained for forward compatibility if a non-panicking verify
+    /// API becomes available. (#412)
     SignatureVerificationFailed = 2008,
     /// No authorized signer has been configured on this SweepController
     /// instance.  `initialize()` must be called first.
     AuthorizedSignerNotSet = 2009,
     /// The provided nonce does not match the expected on-chain nonce,
     /// indicating a stale or replayed signature.
+    ///
+    /// NOTE: Currently unreachable — the nonce is embedded in the signed
+    /// message and verified implicitly by Ed25519 signature verification,
+    /// which panics on mismatch rather than returning this variant.
+    /// Retained for forward compatibility. (#412)
     InvalidNonce = 2010,
+    // NOTE: discriminant 2011 is intentionally unused.  It was removed
+    // during a previous refactor and the gap is preserved to avoid
+    // breaking any off-chain tooling that references the exact numeric
+    // codes above and below. (#413)
     /// The destination address does not match the authorized destination
     /// configured for this controller (locked mode).
     UnauthorizedDestination = 2012,

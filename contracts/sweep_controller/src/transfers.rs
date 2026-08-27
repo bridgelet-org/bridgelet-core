@@ -58,6 +58,13 @@ pub fn execute_transfers(
     // ── Execute transfers ──────────────────────────────────────────────
     // Each transfer() call delegates to the SEP-41 token contract.
     // If any fails, Soroban rolls back the entire transaction atomically.
+    //
+    // NOTE: We intentionally use `transfer()` (which panics on failure)
+    // rather than `try_transfer()`.  In soroban-sdk 22 the `try_*`
+    // generated client method does not produce a standard Rust `Result`,
+    // so it cannot be used with `?` or `.map_err()`.  Because Soroban
+    // transactions are fully atomic, a panicked transfer reverts every
+    // prior transfer in the batch — no partial state is ever committed.
     for payment in payments.iter() {
         let token = TokenClient::new(env, &payment.asset);
         token.transfer(from, destination, &payment.amount);
