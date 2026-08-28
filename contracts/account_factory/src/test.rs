@@ -1,9 +1,27 @@
+#![cfg(test)]
+
 extern crate std;
 
 use super::*;
 use bridgelet_shared::AccountInitRequest;
 use ephemeral_account::EphemeralAccountContract;
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, InvokeError};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger as _},
+    Address, BytesN, Env, IntoVal, InvokeError,
+};
+
+/// `Env::default()` starts with an all-zero ledger network id, but
+/// `ephemeral_account::initialize` (called by `batch_initialize`) enforces
+/// `bridgelet_shared::passphrase::require_network`, so any test that
+/// exercises `batch_initialize` needs the standalone network id set first.
+/// Matches the `test_env()` helper already used in
+/// `sweep_controller/tests/integration.rs`.
+fn test_env() -> Env {
+    let env = Env::default();
+    env.ledger()
+        .set_network_id(bridgelet_shared::passphrase::standalone_network_id(&env));
+    env
+}
 
 // Include the compiled ephemeral account WASM so the factory can deploy it
 // during tests without depending on `stellar contract build` having run.
@@ -27,6 +45,7 @@ fn build_requests(env: &Env, count: u32) -> (u32, Vec<AccountInitRequest>) {
         reqs.push_back(AccountInitRequest {
             expiry_ledger: expiry + i,
             recovery_address: Address::generate(env),
+            authorized_controller: Address::generate(env),
         });
     }
     (expiry, reqs)
@@ -49,7 +68,7 @@ fn assert_unique_addresses(addresses: &[Address]) {
 
 #[test]
 fn test_initialize_rejects_double_init() {
-    let env = Env::default();
+    let env = test_env();
     env.mock_all_auths();
 
     let (wasm_hash, _template) = register_template(&env);
@@ -66,7 +85,7 @@ fn test_initialize_rejects_double_init() {
 
 #[test]
 fn test_initialize_rejects_double_init_with_different_creator() {
-    let env = Env::default();
+    let env = test_env();
     env.mock_all_auths();
 
     let (wasm_hash, _template) = register_template(&env);
@@ -86,7 +105,7 @@ fn test_initialize_rejects_double_init_with_different_creator() {
 
 #[test]
 fn test_initialize_requires_creator_authorization() {
-    let env = Env::default();
+    let env = test_env();
     // Note: no env.mock_all_auths() — real auth path.
 
     let (wasm_hash, _template) = register_template(&env);
@@ -102,7 +121,7 @@ fn test_initialize_requires_creator_authorization() {
 #[test]
 #[should_panic(expected = "Error(Contract, #1)")]
 fn test_initialize_panics_with_numeric_code_on_double_init() {
-    let env = Env::default();
+    let env = test_env();
     env.mock_all_auths();
 
     let (wasm_hash, _template) = register_template(&env);
@@ -119,7 +138,7 @@ fn test_initialize_panics_with_numeric_code_on_double_init() {
 
 #[test]
 fn test_batch_initialize_returns_one_success_per_request() {
-    let env = Env::default();
+    let env = test_env();
     env.mock_all_auths();
 
     let (wasm_hash, _template) = register_template(&env);
@@ -143,9 +162,10 @@ fn test_batch_initialize_returns_one_success_per_request() {
         );
         addresses.push(r.account_address.clone());
 
-        // Account was initialized with the creator as authorized_controller
-        // and admin per the factory's wiring; check status to confirm init
-        // actually executed rather than leaving an un-initialized placeholder.
+        // Account was initialized with its own per-request authorized_controller
+        // (#430) and the factory's fixed admin placeholder; check status to
+        // confirm init actually executed rather than leaving an
+        // un-initialized placeholder.
         let ephemeral_client =
             ephemeral_account::EphemeralAccountContractClient::new(&env, &r.account_address);
         let status = ephemeral_client.get_status();
@@ -160,7 +180,7 @@ fn test_batch_initialize_returns_one_success_per_request() {
 
 #[test]
 fn test_batch_initialize_call_nonce_produces_unique_salts_across_calls() {
-    let env = Env::default();
+    let env = test_env();
     env.mock_all_auths();
 
     let (wasm_hash, _template) = register_template(&env);
@@ -191,7 +211,7 @@ fn test_batch_initialize_call_nonce_produces_unique_salts_across_calls() {
 
 #[test]
 fn test_batch_initialize_keeps_nonce_monotonic_across_more_invocations() {
-    let env = Env::default();
+    let env = test_env();
     env.mock_all_auths();
 
     let (wasm_hash, _template) = register_template(&env);
@@ -232,7 +252,7 @@ fn test_batch_initialize_keeps_nonce_monotonic_across_more_invocations() {
 /// carry the serialized error code rather than None. (#425)
 #[test]
 fn test_batch_initialize_serializes_error_on_failure() {
-    let env = Env::default();
+    let env = test_env();
     env.mock_all_auths();
 
     let (wasm_hash, _template) = register_template(&env);
@@ -243,12 +263,16 @@ fn test_batch_initialize_serializes_error_on_failure() {
     client.initialize(&creator, &wasm_hash);
 
     // Build a request with an expiry_ledger in the past so try_initialize
-    // returns Err(Ok(Error::InvalidExpiry)).
+    // returns Err(Ok(Error::InvalidExpiry)). Advance the ledger first --
+    // `Env::default()` starts the sequence at 0, so subtracting 1 directly
+    // underflows a u32 and panics.
+    env.ledger().set_sequence_number(1000);
     let past_expiry = env.ledger().sequence() - 1;
     let mut reqs = Vec::new(&env);
     reqs.push_back(AccountInitRequest {
         expiry_ledger: past_expiry,
         recovery_address: Address::generate(&env),
+        authorized_controller: Address::generate(&env),
     });
 
     let results = client.batch_initialize(&creator, &reqs);
@@ -265,10 +289,10 @@ fn test_batch_initialize_serializes_error_on_failure() {
     // verify it matches ephemeral_account::Error::InvalidExpiry (1004).
     let err_bytes = r.error.as_ref().unwrap();
     assert_eq!(err_bytes.len(), 4);
-    let code = ((err_bytes.get(0) as u32) << 24)
-        | ((err_bytes.get(1) as u32) << 16)
-        | ((err_bytes.get(2) as u32) << 8)
-        | (err_bytes.get(3) as u32);
+    let code = ((err_bytes.get(0).unwrap() as u32) << 24)
+        | ((err_bytes.get(1).unwrap() as u32) << 16)
+        | ((err_bytes.get(2).unwrap() as u32) << 8)
+        | (err_bytes.get(3).unwrap() as u32);
     assert_eq!(
         code,
         ephemeral_account::Error::InvalidExpiry as u32,
@@ -279,7 +303,7 @@ fn test_batch_initialize_serializes_error_on_failure() {
 /// Successful results must still carry error: None. (#425)
 #[test]
 fn test_batch_initialize_success_has_no_error() {
-    let env = Env::default();
+    let env = test_env();
     env.mock_all_auths();
 
     let (wasm_hash, _template) = register_template(&env);
@@ -301,7 +325,7 @@ fn test_batch_initialize_success_has_no_error() {
 /// batch_initialize can be called multiple times without collision. (#423)
 #[test]
 fn test_batch_initialize_multiple_calls_succeed() {
-    let env = Env::default();
+    let env = test_env();
     env.mock_all_auths();
 
     let (wasm_hash, _template) = register_template(&env);
@@ -327,4 +351,126 @@ fn test_batch_initialize_multiple_calls_succeed() {
     }
     // All 6 addresses across 3 batches must be unique.
     assert_unique_addresses(&all_addresses);
+}
+
+// ── Issue #430: AccountInitRequest carries a per-account authorized_controller ─
+
+/// Two requests in the same batch with different `authorized_controller`
+/// values must each wire the matching controller onto their own account, and
+/// no other. This is the regression test for the hardcoded-controller bug:
+/// on the old code (`authorized_controller` always set to `creator`),
+/// `controller_a` would incorrectly be authorized on `account_b` too.
+#[test]
+fn test_batch_initialize_wires_distinct_authorized_controller_per_request() {
+    let env = test_env();
+    env.mock_all_auths();
+
+    let (wasm_hash, _template) = register_template(&env);
+    let factory_id = env.register(AccountFactory, ());
+    let client = AccountFactoryClient::new(&env, &factory_id);
+
+    let creator = Address::generate(&env);
+    client.initialize(&creator, &wasm_hash);
+
+    let expiry = env.ledger().sequence() + 1000;
+    let controller_a = Address::generate(&env);
+    let controller_b = Address::generate(&env);
+
+    let mut reqs = Vec::new(&env);
+    reqs.push_back(AccountInitRequest {
+        expiry_ledger: expiry,
+        recovery_address: Address::generate(&env),
+        authorized_controller: controller_a.clone(),
+    });
+    reqs.push_back(AccountInitRequest {
+        expiry_ledger: expiry,
+        recovery_address: Address::generate(&env),
+        authorized_controller: controller_b.clone(),
+    });
+
+    let results = client.batch_initialize(&creator, &reqs);
+    let account_a = results.get(0).unwrap().account_address;
+    let account_b = results.get(1).unwrap().account_address;
+
+    let client_a = ephemeral_account::EphemeralAccountContractClient::new(&env, &account_a);
+    let client_b = ephemeral_account::EphemeralAccountContractClient::new(&env, &account_b);
+
+    // Turn off blanket auth mocking -- from here on only the exact mocked
+    // auth below is available, matching how a real deployment behaves.
+    env.set_auths(&[]);
+
+    let asset = Address::generate(&env);
+
+    // controller_b (account_b's controller) must NOT be able to record a
+    // payment on account_a. On the hardcoded-controller bug this would have
+    // succeeded, since both accounts would share the same (creator) controller.
+    let rejected = client_a
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &controller_b,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &account_a,
+                fn_name: "record_payment",
+                args: (500i128, asset.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .try_record_payment(&500, &asset);
+    assert!(
+        matches!(rejected, Err(Err(InvokeError::Abort))),
+        "account_a must not accept controller_b's authorization"
+    );
+
+    // account_a's own controller, controller_a, must be able to record it.
+    client_a
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &controller_a,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &account_a,
+                fn_name: "record_payment",
+                args: (500i128, asset.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .record_payment(&500, &asset);
+
+    assert_eq!(
+        client_a.get_status(),
+        bridgelet_shared::AccountStatus::PaymentReceived
+    );
+
+    // Symmetrically, controller_a (account_a's controller) must not be able
+    // to record a payment on account_b.
+    let rejected_reverse = client_b
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &controller_a,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &account_b,
+                fn_name: "record_payment",
+                args: (500i128, asset.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .try_record_payment(&500, &asset);
+    assert!(
+        matches!(rejected_reverse, Err(Err(InvokeError::Abort))),
+        "account_b must not accept controller_a's authorization"
+    );
+
+    // account_b's own controller, controller_b, must be able to record it.
+    client_b
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &controller_b,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &account_b,
+                fn_name: "record_payment",
+                args: (500i128, asset.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .record_payment(&500, &asset);
+
+    assert_eq!(
+        client_b.get_status(),
+        bridgelet_shared::AccountStatus::PaymentReceived
+    );
 }

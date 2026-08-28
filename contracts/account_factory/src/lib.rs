@@ -7,6 +7,14 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, Bytes, BytesN, 
 pub mod errors;
 pub use crate::errors::Error;
 
+// `src/test.rs` was never wired into the crate module tree, so every unit
+// test in it (double-init guards, salt-uniqueness checks, error
+// serialization, and the new #430 regression test) silently compiled out
+// and never ran under `cargo test -p account_factory`. Declaring the
+// module here matches the pattern already used by `ephemeral_account` and
+// `sweep_controller` (`mod test;` + `#![cfg(test)]` inside test.rs itself).
+mod test;
+
 /// Minimum remaining TTL (in ledgers) before the instance storage is
 /// proactively extended.  Matches the threshold used by the other
 /// contracts in this workspace.
@@ -80,7 +88,10 @@ impl AccountFactory {
     ///
     /// # Arguments
     /// * `creator` - Address creating all accounts
-    /// * `requests` - Vector of [`AccountInitRequest`].
+    /// * `requests` - Vector of [`AccountInitRequest`], each carrying its own
+    ///   `authorized_controller` (#430) so different accounts in the same
+    ///   batch can be wired to different controllers (e.g. distinct
+    ///   `SweepController` instances) instead of always trusting `creator`.
     ///
     /// # Salt uniqueness (issue #241)
     /// `Soroban`'s `deployer().with_current_contract(salt)` derives a contract
@@ -153,7 +164,10 @@ impl AccountFactory {
                 &creator,
                 &request.expiry_ledger,
                 &request.recovery_address,
-                &creator,
+                // Per-account authorized_controller (#430). Previously this was
+                // hardcoded to `creator`, so every factory-created account
+                // trusted `creator` and never a real SweepController instance.
+                &request.authorized_controller,
                 // Placeholder authorized_signer — batch_initialize does not
                 // verify off-chain signatures; the creator (admin) manages
                 // signer keys via the single-account interface.
@@ -163,9 +177,17 @@ impl AccountFactory {
                 // creator (passed as deployer auth above) is the actual admin in
                 // production deployments; this value is here only because the
                 // 6-arg `initialize` shape requires an admin slot on every call.
+                //
+                // NOTE: this must be a validly-checksummed strkey (all-zero
+                // ED25519 public key payload) or `Address::from_str` panics with
+                // "couldn't process the string as strkey", failing every
+                // `batch_initialize` call. The literal here previously had the
+                // wrong checksum suffix and had never been exercised, since
+                // `src/test.rs` (see `lib.rs`'s `mod test;`) was not wired into
+                // this crate until now.
                 &Address::from_str(
                     &env,
-                    "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+                    "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
                 ),
                 // No reserve_contract — factory-created accounts use the
                 // compile-time default base reserve (Issue #405).
@@ -198,6 +220,7 @@ impl AccountFactory {
                         error: Some(error_bytes),
                     }
                 }
+            };
 
             results.push_back(result);
         }

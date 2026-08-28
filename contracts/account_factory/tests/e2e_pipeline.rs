@@ -5,7 +5,10 @@ extern crate std;
 use account_factory::{AccountFactory, AccountFactoryClient};
 use bridgelet_shared::AccountInitRequest;
 use ephemeral_account::{AccountStatus, EphemeralAccountContractClient};
-use soroban_sdk::{testutils::Address as _, vec, Address, BytesN, Env, IntoVal};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger as _},
+    vec, Address, BytesN, Env, IntoVal,
+};
 use sweep_controller::{SweepController, SweepControllerClient};
 
 mod ephemeral_account_wasm {
@@ -14,29 +17,30 @@ mod ephemeral_account_wasm {
     );
 }
 
-/// Issue #250: end-to-end pipeline test exercising all three live contracts
-/// together via the real production entry points -- AccountFactory::batch_initialize
-/// (not a hand-constructed EphemeralAccountContract via env.register), followed by
-/// funding, followed by SweepController::claim.
+/// Issue #250 / #431: end-to-end pipeline test exercising all three live
+/// contracts together via the real production entry points --
+/// AccountFactory::batch_initialize (not a hand-constructed
+/// EphemeralAccountContract via env.register), followed by funding, followed
+/// by SweepController::claim.
 ///
-/// KNOWN FAILING TODAY (tracked as the hardcoded-controller bug, see issue
-/// referenced from #250): AccountFactory::batch_initialize hardcodes `creator`
-/// as both `authorized_controller` and `admin` when initializing the ephemeral
-/// account, instead of passing the real SweepController contract address. That
-/// means the deployed account never trusts SweepController to invoke
-/// `sweep_claim`, so SweepController::claim panics with an authorization
-/// failure once the flow runs through the real factory instead of being
-/// hand-wired, as every other test in this codebase does.
-///
-/// IMPORTANT: once the controller-address bug is fixed, this test will stop
-/// panicking. At that point, remove the `#[should_panic]` attribute below and
-/// replace it with real assertions on the post-claim state (status == Swept,
-/// swept_to == recipient) -- do not leave this marked should_panic once the
-/// underlying bug is fixed, or this test stops providing any coverage.
+/// This used to fail (tracked as the hardcoded-controller bug, issue #430):
+/// AccountFactory::batch_initialize hardcoded `creator` as
+/// `authorized_controller` when initializing the ephemeral account, instead
+/// of passing the real SweepController contract address, so the deployed
+/// account never trusted SweepController to invoke `sweep_claim`. Now that
+/// `AccountInitRequest` carries a per-request `authorized_controller` (#430),
+/// this test passes the real `controller_id` and asserts on the post-claim
+/// state instead of expecting a panic.
 #[test]
-#[should_panic(expected = "Error(Auth, InvalidAction)")]
 fn test_full_pipeline_create_via_factory_fund_and_sweep() {
     let env = Env::default();
+    // `ephemeral_account::initialize` and `SweepController::initialize` both
+    // enforce `bridgelet_shared::passphrase::require_network`, which fails
+    // against the default all-zero network id, so the standalone network id
+    // must be set before either is called (matches the `test_env()` helper
+    // in `sweep_controller/tests/integration.rs`).
+    env.ledger()
+        .set_network_id(bridgelet_shared::passphrase::standalone_network_id(&env));
     env.mock_all_auths_allowing_non_root_auth();
 
     // -- Deploy AccountFactory and upload the real ephemeral_account wasm --
@@ -72,16 +76,35 @@ fn test_full_pipeline_create_via_factory_fund_and_sweep() {
         AccountInitRequest {
             expiry_ledger: expiry,
             recovery_address: recovery.clone(),
+            // Real SweepController contract address (#430) -- this is the
+            // account's authorized_controller from here on.
+            authorized_controller: controller_id.clone(),
         },
     ];
 
     let results = factory_client.batch_initialize(&factory_creator, &requests);
 
     let result = results.get(0).unwrap();
-    assert!(
-        result.success,
-        "factory should successfully deploy and initialize the account"
-    );
+    if !result.success {
+        // Decode the serialized error code (same big-endian u32 encoding
+        // used in account_factory::batch_initialize and asserted on in
+        // account_factory/src/test.rs's own error-serialization test) so a
+        // failure here says *why*, instead of just "false".
+        let code: u32 = match result.error.as_ref() {
+            Some(err_bytes) if err_bytes.len() == 4 => {
+                ((err_bytes.get(0).unwrap() as u32) << 24)
+                    | ((err_bytes.get(1).unwrap() as u32) << 16)
+                    | ((err_bytes.get(2).unwrap() as u32) << 8)
+                    | (err_bytes.get(3).unwrap() as u32)
+            }
+            _ => 0,
+        };
+        panic!(
+            "factory should successfully deploy and initialize the account \
+             (error code: {code}, 0xFFFFFFFF means the outer call itself \
+             failed rather than returning a clean contract error)"
+        );
+    }
 
     let account_address = result.account_address;
     let ephemeral_client = EphemeralAccountContractClient::new(&env, &account_address);
@@ -100,10 +123,8 @@ fn test_full_pipeline_create_via_factory_fund_and_sweep() {
     env.set_auths(&[]);
 
     // -- Sweep via SweepController::claim, with ONLY the recipient's auth mocked --
-    // If the account's authorized_controller doesn't match the real SweepController
-    // address (the hardcoded-controller bug), this call panics with an
-    // authorization failure, since nothing authorized `factory_creator` (the
-    // value wrongly stored as authorized_controller) to approve this claim.
+    // The account's authorized_controller is controller_id (#430), so
+    // SweepController's own cross-contract auth on sweep_claim is honored.
     controller_client
         .mock_auths(&[soroban_sdk::testutils::MockAuth {
             address: &recipient,
