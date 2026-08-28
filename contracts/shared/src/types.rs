@@ -43,6 +43,16 @@ pub struct AccountInfo {
 pub struct AccountInitRequest {
     pub expiry_ledger: u32,
     pub recovery_address: Address,
+    /// Address that will be trusted as the ephemeral account's
+    /// `authorized_controller` (e.g. a `SweepController` instance).
+    ///
+    /// Without a per-request slot for this, `account_factory::batch_initialize`
+    /// had no way to wire an account to anything other than the batch's
+    /// `creator`, which is the root cause of the hardcoded-controller bug
+    /// tracked in issue #430: every factory-created account trusted `creator`
+    /// instead of the real `SweepController` contract, so `SweepController::claim`
+    /// could never authorize a sweep on a factory-created account.
+    pub authorized_controller: Address,
 }
 
 #[contracttype]
