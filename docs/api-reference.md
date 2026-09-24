@@ -21,6 +21,7 @@ fn initialize(
     expiry_ledger: u32,
     recovery_address: Address,
     authorized_controller: Address,
+    admin: Address,
 ) -> Result<(), Error>
 ```
 
@@ -30,6 +31,7 @@ fn initialize(
 | `expiry_ledger` | `u32` | Ledger sequence number at which the account expires. Must be in the future. |
 | `recovery_address` | `Address` | Address that receives funds if the account expires without being swept. |
 | `authorized_controller` | `Address` | The `SweepController` contract address authorized to call `sweep()` on behalf of this account. |
+| `admin` | `Address` | Admin address authorized to call `upgrade()` for contract WASM upgrades. |
 
 **Returns:** `Ok(())` on success.
 
@@ -198,6 +200,56 @@ struct Payment {
 ```
 
 ---
+#### `get_info_paginated`
+
+Returns the account state with paginated payments. Use for accounts with many payments to avoid resource limit failures.
+
+```rust
+fn get_info_paginated(env: Env, params: PaginationParams) -> Result<PaginatedPaymentResponse, Error>
+```
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `params` | `PaginationParams` | Pagination parameters (limit, cursor). Limit max 100. |
+
+**Returns:** `PaginatedPaymentResponse` containing a page of payments, optional next cursor, and total count.
+
+**Errors:** `NotInitialized` if `initialize` has not been called.
+
+**Auth required:** None.
+
+```rust
+struct PaginationParams {
+    limit: u32,                    // Max items per page (1-100, default 50)
+    cursor: Option<PaginationCursor>, // Opaque cursor from previous page
+}
+
+struct PaginationCursor {
+    next_index: u32,   // Index of next item to return
+    total_count: u32,  // Total items available
+}
+
+struct PaginatedPaymentResponse {
+    items: Vec<Payment>,                  // Items in this page
+    next_cursor: Option<PaginationCursor>, // Cursor for next page
+    total_count: u32,               // Total items across all pages
+}
+```
+
+---
+#### `get_payment_count`
+
+Returns the total number of recorded payments without retrieving them.
+
+```rust
+fn get_payment_count(env: Env) -> u32
+```
+
+**Returns:** Payment count (0 if not initialized).
+
+**Auth required:** None.
+
+---
 
 #### `reclaim_reserve`
 
@@ -267,7 +319,40 @@ fn get_reserve_reclaim_event_count(env: Env) -> u32
 ```
 
 ---
+#### `simulate_sweep`
 
+Dry-run sweep simulation: returns the payments that would be swept and
+any error that would prevent a real sweep, without executing on-chain.
+
+```rust
+fn simulate_sweep(env: Env, destination: Address) -> (Vec<Payment>, u32)
+```
+
+**Returns:** `(payments, error_code)` where `error_code` is 0 on success.
+
+**Error Codes:** Same as `sweep`/`sweep_claim` but returned as codes instead of `Err`.
+
+---
+#### `simulate_sweep_paginated`
+
+Dry-run sweep simulation with paginated payments. Returns a page of payments that would be swept.
+
+```rust
+fn simulate_sweep_paginated(env: Env, destination: Address, params: PaginationParams) -> Result<PaginatedPaymentResponse, u32>
+```
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `destination` | `Address` | Destination address (for future fee simulation) |
+| `params` | `PaginationParams` | Pagination parameters (limit, cursor). Limit max 100. |
+
+**Returns:** `PaginatedPaymentResponse` containing a page of payments, optional next cursor, and total count.
+
+**Error Codes:** Same as `sweep`/`sweep_claim` but returned as codes instead of `Err`.
+
+**Auth required:** None.
+
+---
 ### Events
 
 | Topic | Struct | Trigger |
