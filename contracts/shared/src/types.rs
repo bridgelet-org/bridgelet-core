@@ -49,3 +49,51 @@ pub struct AccountInitResult {
     pub success: bool,
     pub error: Option<Bytes>,
 }
+
+/// Pagination cursor for list-returning functions.
+/// Opaque to callers; encode/decode via `to_xdr`/`from_xdr` or base64.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginationCursor {
+    /// Index of the next item to return (0-based).
+    pub next_index: u32,
+    /// Total number of items available (for UI progress).
+    pub total_count: u32,
+}
+
+/// Sentinel value for "no next cursor" - u32::MAX.
+pub const NO_CURSOR: u32 = u32::MAX;
+
+/// Paginated response for Payment items.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedPaymentResponse {
+    /// Items in this page.
+    pub items: Vec<Payment>,
+    /// Cursor for the next page (next_index), or NO_CURSOR if no more pages.
+    pub next_cursor_index: u32,
+    /// Total count of all items (for first page).
+    pub total_count: u32,
+}
+
+/// Paginated response for AccountInitResult items.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedAccountInitResultResponse {
+    /// Items in this page.
+    pub items: Vec<AccountInitResult>,
+    /// Cursor for the next page (next_index), or NO_CURSOR if no more pages.
+    pub next_cursor_index: u32,
+    /// Total count of all items (for first page).
+    pub total_count: u32,
+}
+
+/// Standard pagination parameters for list-returning functions.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginationParams {
+    /// Maximum items per page (1-1000, default 50).
+    pub limit: u32,
+    /// Opaque cursor from previous page (next_index), or NO_CURSOR for first page.
+    pub cursor_index: u32,
+}

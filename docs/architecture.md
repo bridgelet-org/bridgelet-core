@@ -1,15 +1,10 @@
 # Bridgelet Core Architecture
 
-**Version:** 1.1 (corrected against actual `main` source)
-**Last Updated:** July 10, 2026
+**Version:** 1.2 (corrected against actual `main` source + pagination)
+**Last Updated:** September 24, 2026
 **Status:** MVP — not audited
 
-> **Change from v1.0:** the previous version of this document described a
-> two-contract system with `SweepController` marked "Planned (Not Yet
-> Implemented)" throughout. That is no longer accurate (and may never have
-> matched the actual code). The workspace has **four** contracts, three of
-> which are fully implemented, and this revision documents all four as they
-> exist in `contracts/` today.
+> **Change from v1.1:** Added cursor-based pagination support for list-returning functions (AccountFactory batch_initialize, EphemeralAccount get_info/simulate_sweep) to prevent resource limit failures as data grows. Updated EphemeralAccount initialize signature to include `admin` parameter.
 
 ---
 
@@ -159,9 +154,12 @@ fn is_expired(env: Env) -> bool;
 fn expire(env: Env) -> Result<(), Error>;
 fn get_status(env: Env) -> AccountStatus;
 fn get_info(env: Env) -> Result<AccountInfo, Error>;
+fn get_info_paginated(env: Env, params: PaginationParams) -> Result<PaginatedPaymentResponse, Error>;
+fn get_payment_count(env: Env) -> u32;
 fn recover(env: Env, caller: Address) -> Result<(), Error>;
 fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error>;
 fn simulate_sweep(env: Env, destination: Address) -> (Vec<Payment>, u32);
+fn simulate_sweep_paginated(env: Env, destination: Address, params: PaginationParams) -> Result<PaginatedPaymentResponse, u32>;
 
 fn get_reserve_remaining(env: Env) -> i128;
 fn get_reserve_available(env: Env) -> i128;
@@ -278,9 +276,18 @@ fn batch_initialize(
     creator: Address,
     requests: Vec<AccountInitRequest>,
 ) -> Vec<AccountInitResult>;
+fn batch_initialize_paginated(
+    env: Env,
+    creator: Address,
+    requests: Vec<AccountInitRequest>,
+    params: PaginationParams,
+) -> PaginatedAccountInitResultResponse;
+fn batch_initialize_count(env: Env, requests: Vec<AccountInitRequest>) -> u32;
 ```
 
 Deploys a new `ephemeral_account` instance per request via `env.deployer().with_current_contract(salt).deploy_v2(...)`, using an index-derived salt, then calls `try_initialize()` on each. All accounts created this way get `authorized_controller = creator` and `admin = creator` (the factory passes `creator` for both of the last two `initialize` args).
+
+**Pagination:** `batch_initialize_paginated` processes a subset of requests per call, returning a page of results with a cursor for the next page. This prevents resource limit failures for large batches.
 
 **Known gap:** on a per-account failure, `AccountInitResult.error` is hardcoded to `None` (see inline comment: *"In a real implementation, we'd serialize errors"*). Callers can detect `success: false` but not the cause.
 
