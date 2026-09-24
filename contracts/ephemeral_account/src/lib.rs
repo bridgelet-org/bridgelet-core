@@ -8,7 +8,7 @@ mod test;
 
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
-pub use bridgelet_shared::{AccountInfo, AccountStatus, Payment};
+pub use bridgelet_shared::{AccountInfo, AccountStatus, Payment, PaginatedPaymentResponse, PaginationCursor, PaginationParams, NO_CURSOR};
 pub use errors::Error;
 pub use events::{
     AccountCreated, AccountExpired, MultiPaymentReceived, PaymentReceived, ReserveReclaimed,
@@ -405,6 +405,60 @@ impl EphemeralAccountContract {
         })
     }
 
+    /// Get account information with paginated payments.
+    /// Returns a page of payments with a cursor for retrieving subsequent pages.
+    ///
+    /// # Arguments
+    /// * `params` - Pagination parameters (limit, cursor_index)
+    ///
+    /// # Returns
+    /// PaginatedPaymentResponse containing a page of payments
+    /// and a next_cursor_index (NO_CURSOR if no more pages).
+    pub fn get_info_paginated(env: Env, params: PaginationParams) -> Result<PaginatedPaymentResponse, Error> {
+        if !storage::is_initialized(&env) {
+            return Err(Error::NotInitialized);
+        }
+
+        let payments = storage::get_all_payments(&env);
+        let total_count = payments.len() as u32;
+        let limit = params.limit.min(100).max(1) as usize;
+        let start_index = if params.cursor_index == NO_CURSOR { 0 } else { params.cursor_index as usize };
+        let end_index = (start_index + limit).min(total_count as usize);
+
+        let mut items = Vec::new(&env);
+        let mut current_index = 0usize;
+
+        for (_, payment) in payments.iter() {
+            if current_index >= start_index && current_index < end_index {
+                items.push_back(payment);
+            }
+            if current_index >= end_index {
+                break;
+            }
+            current_index += 1;
+        }
+
+        let next_cursor_index = if end_index < total_count as usize {
+            end_index as u32
+        } else {
+            NO_CURSOR
+        };
+
+        Ok(PaginatedPaymentResponse {
+            items,
+            next_cursor_index,
+            total_count,
+        })
+    }
+
+    /// Get the total payment count without retrieving the payments.
+    pub fn get_payment_count(env: Env) -> u32 {
+        if !storage::is_initialized(&env) {
+            return 0;
+        }
+        storage::get_total_payments(&env)
+    }
+
     /// Recover funds for an expired account.
     /// Only callable by the original creator or recovery_address after expiry.
     ///
@@ -508,6 +562,66 @@ impl EphemeralAccountContract {
         }
 
         (payments_vec, 0)
+    }
+
+    /// Dry-run sweep simulation with paginated payments.
+    /// Returns a page of payments that would be swept.
+    ///
+    /// # Arguments
+    /// * `destination` - Destination address (for future fee simulation)
+    /// * `params` - Pagination parameters
+    ///
+    /// # Returns
+    /// PaginatedPaymentResponse containing a page of payments and a next_cursor_index (NO_CURSOR if no more pages).
+    pub fn simulate_sweep_paginated(env: Env, destination: Address, params: PaginationParams) -> Result<PaginatedPaymentResponse, Error> {
+        if !storage::is_initialized(&env) {
+            return Err(Error::NotInitialized);
+        }
+
+        if storage::get_status(&env) == AccountStatus::Swept {
+            return Err(Error::AlreadySwept);
+        }
+
+        if !storage::has_payment_received(&env) {
+            return Err(Error::NoPaymentReceived);
+        }
+
+        if Self::is_expired(env.clone()) {
+            return Err(Error::AccountExpired);
+        }
+
+        let _ = destination;
+
+        let payments = storage::get_all_payments(&env);
+        let total_count = payments.len() as u32;
+        let limit = params.limit.min(100).max(1) as usize;
+        let start_index = if params.cursor_index == NO_CURSOR { 0 } else { params.cursor_index as usize };
+        let end_index = (start_index + limit).min(total_count as usize);
+
+        let mut items = Vec::new(&env);
+        let mut current_index = 0usize;
+
+        for (_, payment) in payments.iter() {
+            if current_index >= start_index && current_index < end_index {
+                items.push_back(payment);
+            }
+            if current_index >= end_index {
+                break;
+            }
+            current_index += 1;
+        }
+
+        let next_cursor_index = if end_index < total_count as usize {
+            end_index as u32
+        } else {
+            NO_CURSOR
+        };
+
+        Ok(PaginatedPaymentResponse {
+            items,
+            next_cursor_index,
+            total_count,
+        })
     }
 
     // Private helper functions
