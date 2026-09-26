@@ -1,6 +1,9 @@
 #![no_std]
 
-use bridgelet_shared::{AccountInitRequest, AccountInitResult, PaginatedAccountInitResultResponse, PaginationParams, NO_CURSOR};
+use bridgelet_shared::{
+    AccountInitRequest, AccountInitResult, PaginatedAccountInitResultResponse, PaginationParams,
+    NO_CURSOR,
+};
 
 mod ephemeral_account_contract {
     soroban_sdk::contractimport!(
@@ -138,7 +141,11 @@ impl AccountFactory {
 
         let total_count = requests.len() as u32;
         let limit = params.limit.min(1000).max(1) as u32;
-        let start_index = if params.cursor_index == NO_CURSOR { 0 } else { params.cursor_index };
+        let start_index = if params.cursor_index == NO_CURSOR {
+            0
+        } else {
+            params.cursor_index
+        };
         let end_index = (start_index + limit).min(total_count);
 
         let mut results = Vec::new(&env);
