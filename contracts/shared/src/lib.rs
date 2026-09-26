@@ -3,7 +3,7 @@
 mod types;
 
 pub use types::{
-    AccountInfo, AccountInitRequest, AccountInitResult, AccountStatus, Payment,
-    PaginatedPaymentResponse, PaginatedAccountInitResultResponse, PaginationCursor, PaginationParams,
-    NO_CURSOR,
+    AccountInfo, AccountInitRequest, AccountInitResult, AccountStatus,
+    PaginatedAccountInitResultResponse, PaginatedPaymentResponse, PaginationCursor,
+    PaginationParams, Payment, NO_CURSOR,
 };
