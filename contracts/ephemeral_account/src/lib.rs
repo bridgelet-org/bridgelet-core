@@ -8,7 +8,10 @@ mod test;
 
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec};
 
-pub use bridgelet_shared::{AccountInfo, AccountStatus, Payment, PaginatedPaymentResponse, PaginationCursor, PaginationParams, NO_CURSOR};
+pub use bridgelet_shared::{
+    AccountInfo, AccountStatus, PaginatedPaymentResponse, PaginationCursor, PaginationParams,
+    Payment, NO_CURSOR,
+};
 pub use errors::Error;
 pub use events::{
     AccountCreated, AccountExpired, MultiPaymentReceived, PaymentReceived, ReserveReclaimed,
@@ -414,7 +417,10 @@ impl EphemeralAccountContract {
     /// # Returns
     /// PaginatedPaymentResponse containing a page of payments
     /// and a next_cursor_index (NO_CURSOR if no more pages).
-    pub fn get_info_paginated(env: Env, params: PaginationParams) -> Result<PaginatedPaymentResponse, Error> {
+    pub fn get_info_paginated(
+        env: Env,
+        params: PaginationParams,
+    ) -> Result<PaginatedPaymentResponse, Error> {
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
@@ -422,7 +428,11 @@ impl EphemeralAccountContract {
         let payments = storage::get_all_payments(&env);
         let total_count = payments.len() as u32;
         let limit = params.limit.min(100).max(1) as usize;
-        let start_index = if params.cursor_index == NO_CURSOR { 0 } else { params.cursor_index as usize };
+        let start_index = if params.cursor_index == NO_CURSOR {
+            0
+        } else {
+            params.cursor_index as usize
+        };
         let end_index = (start_index + limit).min(total_count as usize);
 
         let mut items = Vec::new(&env);
@@ -573,7 +583,11 @@ impl EphemeralAccountContract {
     ///
     /// # Returns
     /// PaginatedPaymentResponse containing a page of payments and a next_cursor_index (NO_CURSOR if no more pages).
-    pub fn simulate_sweep_paginated(env: Env, destination: Address, params: PaginationParams) -> Result<PaginatedPaymentResponse, Error> {
+    pub fn simulate_sweep_paginated(
+        env: Env,
+        destination: Address,
+        params: PaginationParams,
+    ) -> Result<PaginatedPaymentResponse, Error> {
         if !storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
         }
@@ -595,7 +609,11 @@ impl EphemeralAccountContract {
         let payments = storage::get_all_payments(&env);
         let total_count = payments.len() as u32;
         let limit = params.limit.min(100).max(1) as usize;
-        let start_index = if params.cursor_index == NO_CURSOR { 0 } else { params.cursor_index as usize };
+        let start_index = if params.cursor_index == NO_CURSOR {
+            0
+        } else {
+            params.cursor_index as usize
+        };
         let end_index = (start_index + limit).min(total_count as usize);
 
         let mut items = Vec::new(&env);
