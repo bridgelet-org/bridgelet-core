@@ -1,6 +1,9 @@
 #![no_std]
 
-use bridgelet_shared::{AccountInitRequest, AccountInitResult, PaginatedAccountInitResultResponse, PaginationParams, NO_CURSOR};
+use bridgelet_shared::{
+    AccountInitRequest, AccountInitResult, PaginatedAccountInitResultResponse, PaginationParams,
+    NO_CURSOR,
+};
 
 mod ephemeral_account_contract {
     soroban_sdk::contractimport!(
@@ -136,9 +139,13 @@ impl AccountFactory {
             .get::<_, BytesN<32>>(&DataKey::EphemeralAccountWasmHash)
             .unwrap();
 
-        let total_count = requests.len() as u32;
-        let limit = params.limit.min(1000).max(1) as u32;
-        let start_index = if params.cursor_index == NO_CURSOR { 0 } else { params.cursor_index };
+        let total_count = requests.len();
+        let limit = params.limit.clamp(1, 1000);
+        let start_index = if params.cursor_index == NO_CURSOR {
+            0
+        } else {
+            params.cursor_index
+        };
         let end_index = (start_index + limit).min(total_count);
 
         let mut results = Vec::new(&env);
@@ -199,8 +206,9 @@ impl AccountFactory {
     ///
     /// # Returns
     /// Total count of accounts to be created.
+    #[allow(clippy::useless_conversion)]
     pub fn batch_initialize_count(_env: Env, requests: Vec<AccountInitRequest>) -> u32 {
-        requests.len() as u32
+        u32::try_from(requests.len()).unwrap_or(u32::MAX)
     }
 }
 
