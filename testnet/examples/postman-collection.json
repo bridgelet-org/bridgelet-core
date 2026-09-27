@@ -1,0 +1,1060 @@
+{
+  "info": {
+    "_postman_id": "b7c1d0e4-2f5a-4c6b-9d38-6a1e0c5b74f2",
+    "name": "Bridgelet Core - read-only Soroban RPC probes (testnet)",
+    "description": "Bridgelet Core - read-only Soroban RPC probes for Stellar **testnet**.\n\nWRITTEN FROM SOURCE. NOT VALIDATED AGAINST A LIVE ENDPOINT.\nAs of the last review (testnet/registry/contract-status.md, dated 2026-09-24) all\nfour Bridgelet contracts are recorded as UNDEPLOYED: contract ID \"TBD\",\n\"Last Verified: Never\". deployments/testnet.json and\ndeployment-artifacts/contract-ids.txt do contain IDs from a 2026-07-12\ndeployment, but testnet/security/README.md says to treat them as unverified until\nsomeone confirms them on-chain per testnet/registry/verify-contract-live.md.\nEvery saved response in this collection is a HAND-WRITTEN ILLUSTRATIVE SAMPLE\nderived from the contract source. None of them was captured from a live node,\nand none of them is evidence that a call has ever succeeded on-chain.\n\nNOTHING IN THIS COLLECTION CAN CHANGE STATE.\nEvery request is either a plain RPC query (getHealth, getLatestLedger, getEvents)\nor a `simulateTransaction` against a read-only contract method. The Soroban\nsimulator evaluates the call and returns a result; it does not include the\ntransaction in a ledger. No request here signs, no request here submits, and no\nrequest here is capable of mutating contract state. State-changing methods are\ndeliberately absent - in particular AccountFactory::batch_initialize and\nbatch_initialize_paginated are EXCLUDED, because they deploy contracts.\n\nNETWORK PASSPHRASE - a live footgun.\n`networkPassphrase` is set to the Testnet passphrase\n\"Test SDF Network ; September 2015\" (spaces around the semicolon included), per\ntestnet/docs/network-config.md. testnet/docs/changelog.md's Unreleased section\nrecords that `initialize` is meant to enforce a network-passphrase check and\nthat the expected value on `main` is currently the STANDALONE passphrase, which\nwould reject testnet calls. The current source does not contain that check, so\n`Error(Contract, #1007)` cannot be produced by this build - but the passphrase\nvariable is here so that a transaction builder you wire to this collection\ncannot silently pick the wrong network. See testnet/docs/network-config.md.\n\nTHE ONE THING YOU MUST SUPPLY YOURSELF: the transaction envelope.\nSoroban RPC has no convenience \"call this contract method\" endpoint. A\n`simulateTransaction` takes a base64 XDR `TransactionEnvelope`, and that\nenvelope has to be built by a transaction builder (an SDK, or the Stellar CLI).\nIt encodes the contract ID, the function name, the arguments and the source\naccount, so it is deployment-specific and cannot be written by hand or\ncommitted here. Each `simulateTransaction` request therefore references a\ncollection variable named `txEnvelope*`, one per invocation. Fill them in, or\nregenerate the whole collection for your deployment.\n\nEach read-only envelope MUST carry an inactive / read-only source account and\nMUST NOT be signed. simulateTransaction ignores the signature anyway, but an\nenvelope built with a signing key in scope is one more way to leak a key.\n\nHOW TO USE\n1. Import this file: Postman > Import > drag the .json in (or Collections >\n   New > Import). No environment is required; every value is a collection\n   variable.\n2. SET YOUR VARIABLES FIRST. Review the \"variable\" array below. At minimum set\n   `rpcUrl`, `networkPassphrase`, `ephemeralAccountId`, `sweepControllerId`,\n   `reserveContractId` and `startLedger`. Contract IDs must be verified before\n   use - a copied ID is not proof of availability.\n3. Run folder \"00 - Node health\" FIRST. A confusing Soroban error is very often\n   just an unreachable node. If getHealth does not return status \"pass\", nothing\n   else in this collection will tell you anything.\n4. Fill in the `txEnvelope*` variables from your own transaction builder.\n5. Send. Read `result.results[0].xdr` (base64 ScVal) for the return value, and\n   decode it with scValToNative if you are in the JavaScript SDK.\n\nSCVal ARGUMENT ENCODING used in the request descriptions below:\n  Address  ->  {\"address\": \"C... or G...\"}          ScAddress\n  u32      ->  {\"u32\": \"12345\"}                      decimal STRING\n  i128     ->  {\"i128\": \"1000000000\"}                decimal STRING\n  u64      ->  {\"u64\": \"7\"}                          decimal STRING\n  Vec<T>   ->  a JSON array of T; a struct T is a JSON object keyed by field name\n  void     ->  {\"void\": null}                        e.g. get_base_reserve() when unset\n\nCOMPANION DOCS\n  testnet/examples/checking-account-status.md    what each probe proves\n  testnet/examples/error-handling.md             contract error -> domain meaning\n  testnet/examples/idempotency-considerations.md duplicate submissions\n  docs/api-reference.md                          the authoritative interface\n  testnet/docs/network-config.md                 endpoints and passphrase\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "_postman_exported_at": "2026-09-26T00:00:00Z",
+  "_postman_exported_by": "brightMedina5050",
+  "_postman_version": "1.0",
+  "_postman_source": "Written by reading contracts/ephemeral_account/src/lib.rs, contracts/sweep_controller/src/lib.rs, contracts/sweep_controller/src/authorization.rs, contracts/reserve_contract/src/lib.rs, contracts/account_factory/src/lib.rs and contracts/shared/src/types.rs. No response in this file was captured from a live node.",
+  "_postman_verification_status": "UNVERIFIED. Requires a live Soroban RPC endpoint and verified contract IDs before any request is expected to return real data.",
+  "_postman_related_documentation": [
+    "testnet/examples/README.md",
+    "testnet/examples/checking-account-status.md",
+    "testnet/examples/error-handling.md",
+    "testnet/examples/idempotency-considerations.md",
+    "testnet/registry/contract-status.md",
+    "testnet/registry/event-topics.md",
+    "testnet/docs/network-config.md",
+    "testnet/docs/soroban-cli-quickref.md",
+    "docs/api-reference.md",
+    "docs/SIGNATURE_FORMAT.md"
+  ],
+  "_postman_version_history": [
+    {
+      "version": "1.0",
+      "date": "2026-09-26",
+      "changes": "Initial read-only Soroban RPC collection, written from source, pending a live endpoint to validate"
+    }
+  ],
+  "variable": [
+    {
+      "key": "rpcUrl",
+      "value": "https://soroban-testnet.stellar.org",
+      "type": "string",
+      "description": "Soroban RPC endpoint. From testnet/docs/network-config.md. Verify it is reachable with the getHealth request in folder 00."
+    },
+    {
+      "key": "networkPassphrase",
+      "value": "Test SDF Network ; September 2015",
+      "type": "string",
+      "description": "MUST be the Testnet passphrase, spaces around the semicolon included. A transaction builder reading this must not be pointed at Standalone or Mainnet. See testnet/docs/network-config.md."
+    },
+    {
+      "key": "ephemeralAccountId",
+      "value": "",
+      "type": "string",
+      "description": "A verified EphemeralAccount contract ID (C...). Leave empty until you have confirmed it; testnet/registry/contract-status.md currently records the contract as undeployed."
+    },
+    {
+      "key": "sweepControllerId",
+      "value": "",
+      "type": "string",
+      "description": "A verified SweepController contract ID (C...). The nonce is global to this deployment."
+    },
+    {
+      "key": "reserveContractId",
+      "value": "",
+      "type": "string",
+      "description": "A verified ReserveContract contract ID (C...). Currently recorded as not deployed and not wired into EphemeralAccount."
+    },
+    {
+      "key": "accountFactoryId",
+      "value": "",
+      "type": "string",
+      "description": "A verified AccountFactory contract ID (C...). Only the read-only batch_initialize_count request is used; the deploying methods are excluded on purpose."
+    },
+    {
+      "key": "destination",
+      "value": "",
+      "type": "string",
+      "description": "A G... destination address. Required ONLY by simulate_sweep, which accepts a destination it does not currently use."
+    },
+    {
+      "key": "startLedger",
+      "value": "",
+      "type": "string",
+      "description": "Lower ledger bound for the getEvents requests. Use a recent closed ledger, not 0."
+    },
+    {
+      "key": "readOnlySource",
+      "value": "",
+      "type": "string",
+      "description": "The G... account id used as the read-only, INACTIVE source account on every transaction envelope in this collection. It must never hold a signing key for this workflow. An inactive source is fine because simulateTransaction does not require a signature."
+    },
+    {
+      "key": "envelopeHelp",
+      "value": "",
+      "type": "string",
+      "description": "The txEnvelope* variables below are base64 XDR TransactionEnvelopes. Build them with your own transaction builder; they cannot be hand-written or committed to this file."
+    },
+    {
+      "key": "txEnvelopeIsExpired",
+      "value": "",
+      "type": "",
+      "description": "Base64 TransactionEnvelope invoking EphemeralAccount::is_expired with NO arguments."
+    },
+    {
+      "key": "txEnvelopeGetStatus",
+      "value": "",
+      "type": "string",
+      "description": "Base64 TransactionEnvelope invoking EphemeralAccount::get_status with NO arguments."
+    },
+    {
+      "key": "txEnvelopeGetInfo",
+      "value": "",
+      "type": "string",
+      "description": "Base64 TransactionEnvelope invoking EphemeralAccount::get_info with NO arguments."
+    },
+    {
+      "key": "txEnvelopeSimulateSweep",
+      "value": "",
+      "type": "string",
+      "description": "Base64 TransactionEnvelope invoking EphemeralAccount::simulate_sweep with ONE address argument ({{destination}})."
+    },
+    {
+      "key": "txEnvelopeAccountEvents",
+      "value": "",
+      "type": "string",
+      "description": "Base64 TransactionEnvelope invoking EphemeralAccount::get_payment_count with NO arguments. Paired with the getEvents request for the created/payment/swept_mul topics."
+    },
+    {
+      "key": "txEnvelopeCanSweep",
+      "value": "",
+      "type": "string",
+      "description": "Base64 TransactionEnvelope invoking SweepController::can_sweep with ONE address argument ({{ephemeralAccountId}})."
+    },
+    {
+      "key": "txEnvelopeGetNonce",
+      "value": "",
+      "type": "string",
+      "description": "Base64 TransactionEnvelope invoking SweepController::get_nonce with NO arguments."
+    },
+    {
+      "key": "txEnvelopeControllerEvents",
+      "value": "",
+      "type": "string",
+      "description": "Base64 TransactionEnvelope invoking SweepController::get_nonce with NO arguments. Paired with the getEvents request for the sweep topic."
+    },
+    {
+      "key": "txEnvelopeHasBaseReserve",
+      "value": "",
+      "type": "string",
+      "description": "Base64 TransactionEnvelope invoking ReserveContract::has_base_reserve with NO arguments."
+    },
+    {
+      "key": "txEnvelopeGetBaseReserve",
+      "value": "",
+      "type": "string",
+      "description": "Base64 TransactionEnvelope invoking ReserveContract::get_base_reserve with NO arguments."
+    },
+    {
+      "key": "txEnvelopeBatchInitializeCount",
+      "value": "",
+      "type": "string",
+      "description": "Base64 TransactionEnvelope invoking AccountFactory::batch_initialize_count with a VEC of AccountInitRequest maps. Read-only: it only counts, it does not deploy or initialize anything."
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Node health (run this first)",
+      "description": "Two plain RPC queries with no transaction envelope and no contract involved. A confusing Soroban error is very often an unreachable node; establish that it is not before you start decoding contract behaviour. Both are read-only queries and cannot change state.",
+      "item": [
+        {
+          "name": "getHealth (is this node even up?)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"getHealth\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{rpcUrl}}",
+              "host": [
+                "{{rpcUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "RUN THIS FIRST.\n\nSoroban RPC method `getHealth`. Takes no params. A confusing Soroban error is very often just an unreachable node, and this separates the two cases before you start decoding anything.\n\nLook for `status: \"pass\"`. If it does not return that, or the request times out, nothing else in this collection is meaningful. See testnet/registry/verify-contract-live.md and testnet/runbooks/rpc-outage.md.\n\nRead-only RPC query: cannot change state."
+          },
+          "response": [
+            {
+              "name": "ILLUSTRATIVE SAMPLE - hand-written from source, NOT captured from a live node - healthy node",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{rpcUrl}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\n    \"status\": \"pass\",\n    \"latestLedger\": \"<decimal string>\",\n    \"oldestLedger\": \"<decimal string>\",\n    \"ledgerRetentionWindow\": \"<decimal string>\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "getLatestLedger (seed the ledger bound, read the clock)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"getLatestLedger\",\n  \"params\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{rpcUrl}}",
+              "host": [
+                "{{rpcUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "Soroban RPC method `getLatestLedger`. Takes an empty params object.\n\n`result.sequence` is the current ledger, as a decimal STRING. It is the value you need for two things in this tree: the `expiry_ledger` of a new EphemeralAccount (must be strictly greater than the current ledger or `initialize` returns InvalidExpiry, code 5), and the `startLedger` variable for the getEvents requests below.\n\nNote the SCVal-vs-string distinction: this is an RPC ledger number (a JSON string), not a Soroban u32. testnet/tooling/nonce-inspector-spec.md makes the same point about get_nonce: carry a u64 as a number or a decimal string, never as a float.\n\nRead-only RPC query: cannot change state."
+          },
+          "response": [
+            {
+              "name": "ILLUSTRATIVE SAMPLE - hand-written from source, NOT captured from a live node - latest ledger",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{rpcUrl}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\n    \"id\": \"<ledger id>\",\n    \"pagingToken\": \"<decimal string>\",\n    \"sequence\": \"<decimal string>\",\n    \"hash\": \"<hex>\",\n    \"prevHash\": \"<hex>\",\n    \"timestamp\": \"<unix seconds, decimal string>\",\n    \"successfulTransactionCount\": \"<decimal string>\",\n    \"failedTransactionCount\": \"<decimal string>\",\n    \"operationCount\": \"<decimal string>\",\n    \"txSetOperationCount\": \"<decimal string>\",\n    \"closedAt\": \"<RFC 3339 timestamp>\"\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "10 - EphemeralAccount (read-only)",
+      "description": "Probes against a single EphemeralAccount instance, addressed by its contract ID. Every method here is a getter, so every one is safe to simulate. The interesting result is the contrast between them: is_expired and get_status both report an UNINITIALIZED instance as healthy (false / Active), and only get_info tells you the truth. See testnet/examples/checking-account-status.md.",
+      "item": [
+        {
+          "name": "is_expired",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"simulateTransaction\",\n  \"params\": {\n    \"transaction\": \"{{txEnvelopeIsExpired}}\",\n    \"resourceConfig\": {\n      \"resourceFee\": \"100\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{rpcUrl}}",
+              "host": [
+                "{{rpcUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "READ-ONLY. This request cannot change state: it is a simulation of a getter, and simulateTransaction never includes a transaction in a ledger. No signature is required or wanted, and the source account on the envelope must be inactive.\n\nSource: contracts/ephemeral_account/src/lib.rs. The signature is quoted in the SCVal arguments line below - check it against the file before you build the envelope.\n\nSCVal arguments: []  - is_expired(env) takes NO arguments; the account is addressed by the contract ID on the envelope, not by an argument\n\nSignature: pub fn is_expired(env: Env) -> bool\n\nReturns: a bool ScVal.\n\nThe boundary matters: the implementation is `current_ledger >= expiry_ledger`, so an account expiring THIS ledger already reports expired. There is no grace ledger.\n\nAND the trap this request exists to expose: for an instance that was never initialized, is_expired returns `false` - the same value a healthy account returns. A `false` is NOT proof the account is live. See testnet/examples/checking-account-status.md.\n\n\n\nEnvelope: build the base64 XDR TransactionEnvelope yourself and put it in the `%s` collection variable. See the collection description."
+          },
+          "response": [
+            {
+              "name": "ILLUSTRATIVE SAMPLE - hand-written from source, NOT captured from a live node - bool return in result.results[0].xdr",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{rpcUrl}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\n    \"jsonrpc\": \"2.0\",\n    \"id\": 1,\n    \"result\": {\n      \"latestLedger\": \"<decimal string>\",\n      \"error\": \"\",\n      \"transactionData\": \"<base64 XDR of the simulated transaction>\",\n      \"minResourceFee\": \"<decimal string, in stroops>\",\n      \"events\": [],\n      \"results\": [\n        {\n          \"auth\": [],\n          \"xdr\": \"<base64 XDR ScVal: the return value>\"\n        }\n      ],\n      \"cost\": {\n        \"cpuInsns\": \"<decimal string>\",\n        \"memBytes\": \"<decimal string>\"\n      }\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "get_status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"simulateTransaction\",\n  \"params\": {\n    \"transaction\": \"{{txEnvelopeGetStatus}}\",\n    \"resourceConfig\": {\n      \"resourceFee\": \"100\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{rpcUrl}}",
+              "host": [
+                "{{rpcUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "READ-ONLY. This request cannot change state: it is a simulation of a getter, and simulateTransaction never includes a transaction in a ledger. No signature is required or wanted, and the source account on the envelope must be inactive.\n\nSource: contracts/ephemeral_account/src/lib.rs. The signature is quoted in the SCVal arguments line below - check it against the file before you build the envelope.\n\nSCVal arguments: []  - get_status(env) takes NO arguments\n\nSignature: pub fn get_status(env: Env) -> AccountStatus\n\nReturns: an AccountStatus enum ScVal, repr(u32): 0 Active, 1 PaymentReceived, 2 Swept, 3 Expired.\n\nSame trap as is_expired: an UNINITIALIZED instance returns Active (0). Do not read 0 as proof of initialization. get_info is the probe that proves it.\n\n\n\nEnvelope: build the base64 XDR TransactionEnvelope yourself and put it in the `%s` collection variable. See the collection description."
+          },
+          "response": [
+            {
+              "name": "ILLUSTRATIVE SAMPLE - hand-written from source, NOT captured from a live node - AccountStatus discriminant in result.results[0].xdr",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{rpcUrl}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\n    \"jsonrpc\": \"2.0\",\n    \"id\": 1,\n    \"result\": {\n      \"latestLedger\": \"<decimal string>\",\n      \"error\": \"\",\n      \"transactionData\": \"<base64 XDR of the simulated transaction>\",\n      \"minResourceFee\": \"<decimal string, in stroops>\",\n      \"events\": [],\n      \"results\": [\n        {\n          \"auth\": [],\n          \"xdr\": \"<base64 XDR ScVal: the return value>\"\n        }\n      ],\n      \"cost\": {\n        \"cpuInsns\": \"<decimal string>\",\n        \"memBytes\": \"<decimal string>\"\n      }\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "get_info (the initialization proof)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"simulateTransaction\",\n  \"params\": {\n    \"transaction\": \"{{txEnvelopeGetInfo}}\",\n    \"resourceConfig\": {\n      \"resourceFee\": \"100\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{rpcUrl}}",
+              "host": [
+                "{{rpcUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "READ-ONLY. This request cannot change state: it is a simulation of a getter, and simulateTransaction never includes a transaction in a ledger. No signature is required or wanted, and the source account on the envelope must be inactive.\n\nSource: contracts/ephemeral_account/src/lib.rs. The signature is quoted in the SCVal arguments line below - check it against the file before you build the envelope.\n\nSCVal arguments: []  - get_info(env) takes NO arguments\n\nSignature: pub fn get_info(env: Env) -> Result<AccountInfo, Error>\n\nReturns: a Result. On an uninitialized instance this is the ONE probe of the three that reports the truth: it returns Err(Error::NotInitialized), whose discriminant is 2.\n\nAccountInfo fields: creator (Address), status (AccountStatus), expiry_ledger (u32), recovery_address (Address), payment_received (bool), payment_count (u32), payments (Vec<Payment>), swept_to (Option<Address>). Payment is { asset: Address, amount: i128, timestamp: u64 } - i128 decodes to a decimal STRING, so keep it as a BigInt.\n\nSee the second saved example for what an uninitialized account looks like.\n\n\n\nEnvelope: build the base64 XDR TransactionEnvelope yourself and put it in the `%s` collection variable. See the collection description."
+          },
+          "response": [
+            {
+              "name": "ILLUSTRATIVE SAMPLE - hand-written from source, NOT captured from a live node - AccountInfo map in result.results[0].xdr",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{rpcUrl}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\n    \"jsonrpc\": \"2.0\",\n    \"id\": 1,\n    \"result\": {\n      \"latestLedger\": \"<decimal string>\",\n      \"error\": \"\",\n      \"transactionData\": \"<base64 XDR of the simulated transaction>\",\n      \"minResourceFee\": \"<decimal string, in stroops>\",\n      \"events\": [],\n      \"results\": [\n        {\n          \"auth\": [],\n          \"xdr\": \"<base64 XDR ScVal: the return value>\"\n        }\n      ],\n      \"cost\": {\n        \"cpuInsns\": \"<decimal string>\",\n        \"memBytes\": \"<decimal string>\"\n      }\n    }\n  }\n}"
+            },
+            {
+              "name": "ILLUSTRATIVE SAMPLE - hand-written from source, NOT captured from a live node - uninitialized account: the contract refuses",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{rpcUrl}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"error\": {\n    \"code\": -32602,\n    \"message\": \"HostError: Error(Contract, #2) (Contract#2(1))\"\n  },\n  \"data\": {\n    \"_note\": \"ILLUSTRATIVE. Exact framing of a failed simulation varies by RPC version: some builds return a JSON-RPC error object like this, others return HTTP 200 with a non-empty result.error string. Handle both. Error(Contract, #2) from EphemeralAccount is NotInitialized.\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "simulate_sweep (dry run, in-band error code)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"simulateTransaction\",\n  \"params\": {\n    \"transaction\": \"{{txEnvelopeSimulateSweep}}\",\n    \"resourceConfig\": {\n      \"resourceFee\": \"100\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{rpcUrl}}",
+              "host": [
+                "{{rpcUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "READ-ONLY. This request cannot change state: it is a simulation of a getter, and simulateTransaction never includes a transaction in a ledger. No signature is required or wanted, and the source account on the envelope must be inactive.\n\nSource: contracts/ephemeral_account/src/lib.rs. The signature is quoted in the SCVal arguments line below - check it against the file before you build the envelope.\n\nSCVal arguments: [{\"address\": \"{{destination}}\"}]  - ONE ScAddress argument, a G... destination. It is accepted but NOT used by the current implementation (the body does `let _ = destination;`, reserved for future fee simulation). Pass a real address anyway so the envelope stays honest.\n\nSignature: pub fn simulate_sweep(env: Env, destination: Address) -> (Vec<Payment>, u32)\n\nReturns: a TUPLE, not a Result. The second element is an error CODE as a u32, in-band:\n  0        success\n  2        NotInitialized\n  7        AlreadySwept\n  10       NoPaymentReceived\n  11       AccountExpired\nThose are EphemeralAccount's own discriminants. A client that only matches on thrown errors will miss every one of them.\n\nThe first element is the Vec<Payment> that would be swept.\n\n\n\nEnvelope: build the base64 XDR TransactionEnvelope yourself and put it in the `%s` collection variable. See the collection description."
+          },
+          "response": [
+            {
+              "name": "ILLUSTRATIVE SAMPLE - hand-written from source, NOT captured from a live node - (Vec<Payment>, u32) tuple in result.results[0].xdr",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{rpcUrl}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\n    \"jsonrpc\": \"2.0\",\n    \"id\": 1,\n    \"result\": {\n      \"latestLedger\": \"<decimal string>\",\n      \"error\": \"\",\n      \"transactionData\": \"<base64 XDR of the simulated transaction>\",\n      \"minResourceFee\": \"<decimal string, in stroops>\",\n      \"events\": [],\n      \"results\": [\n        {\n          \"auth\": [],\n          \"xdr\": \"<base64 XDR ScVal: the return value>\"\n        }\n      ],\n      \"cost\": {\n        \"cpuInsns\": \"<decimal string>\",\n        \"memBytes\": \"<decimal string>\"\n      }\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "get_payment_count (cheap count, no Vec<Payment> payload)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"simulateTransaction\",\n  \"params\": {\n    \"transaction\": \"{{txEnvelopeAccountEvents}}\",\n    \"resourceConfig\": {\n      \"resourceFee\": \"100\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{rpcUrl}}",
+              "host": [
+                "{{rpcUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "READ-ONLY. This request cannot change state: it is a simulation of a getter, and simulateTransaction never includes a transaction in a ledger. No signature is required or wanted, and the source account on the envelope must be inactive.\n\nSource: contracts/ephemeral_account/src/lib.rs. The signature is quoted in the SCVal arguments line below - check it against the file before you build the envelope.\n\nSCVal arguments: []  - get_payment_count(env) takes NO arguments\n\nSignature: pub fn get_payment_count(env: Env) -> u32\n\nReturns: a u32 ScVal. Returns 0 for an uninitialized instance rather than erroring - another false-negative of the same family as is_expired.\n\nUse it instead of get_info when you only need the count, so you do not pull the whole payment vector into the simulation result.\n\n\n\nEnvelope: build the base64 XDR TransactionEnvelope yourself and put it in the `%s` collection variable. See the collection description."
+          },
+          "response": [
+            {
+              "name": "ILLUSTRATIVE SAMPLE - hand-written from source, NOT captured from a live node - u32 in result.results[0].xdr",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{rpcUrl}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\n    \"jsonrpc\": \"2.0\",\n    \"id\": 1,\n    \"result\": {\n      \"latestLedger\": \"<decimal string>\",\n      \"error\": \"\",\n      \"transactionData\": \"<base64 XDR of the simulated transaction>\",\n      \"minResourceFee\": \"<decimal string, in stroops>\",\n      \"events\": [],\n      \"results\": [\n        {\n          \"auth\": [],\n          \"xdr\": \"<base64 XDR ScVal: the return value>\"\n        }\n      ],\n      \"cost\": {\n        \"cpuInsns\": \"<decimal string>\",\n        \"memBytes\": \"<decimal string>\"\n      }\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "getEvents (created / payment / multi_pay / swept_mul / expired / reserve)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"getEvents\",\n  \"params\": {\n    \"startLedger\": \"{{startLedger}}\",\n    \"endLedger\": \"{{startLedger}}\",\n    \"filters\": [\n      {\n        \"type\": \"contract\",\n        \"contractIds\": [\n          \"{{ephemeralAccountId}}\"\n        ],\n        \"topics\": [\n          [\n            \"created\"\n          ],\n          [\n            \"payment\"\n          ],\n          [\n            \"multi_pay\"\n          ],\n          [\n            \"swept_mul\"\n          ],\n          [\n            \"expired\"\n          ],\n          [\n            \"reserve\"\n          ]\n        ]\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{rpcUrl}}",
+              "host": [
+                "{{rpcUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "Soroban RPC method `getEvents`. Set `endLedger` to a real closed ledger; this collection leaves it equal to startLedger as a placeholder.\n\nTopic[0] is always an ScSymbol carrying the event name, and the payload is a contracttype-serialized struct. The six EphemeralAccount topics are:\n\n  created     AccountCreated { creator, expiry_ledger }\n  payment     PaymentReceived { amount, asset }         - first record_payment\n  multi_pay   MultiPaymentReceived { asset, amount }    - subsequent record_payment\n  swept_mul   SweepExecutedMulti { destination, payments }\n  expired     AccountExpired { recovery_address, total_amount, reserve_amount }\n  reserve     ReserveReclaimed { destination, amount, sweep_id, fully_reclaimed, remaining_reserve }\n\nPer testnet/registry/event-topics.md. Note that `reserve` fires on every sweep and expiry with amount 0 once fully reclaimed, so event COUNT is not a proxy for value moved - filter on `amount`. And an event alone is not proof of a balance change.\n\nRead-only RPC query: cannot change state."
+          },
+          "response": [
+            {
+              "name": "ILLUSTRATIVE SAMPLE - hand-written from source, NOT captured from a live node - AccountCreated event",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{rpcUrl}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\n    \"events\": [\n      {\n        \"type\": \"contract\",\n        \"contractId\": \"<C...>\",\n        \"topic\": [\n          \"<base64 ScSymbol \\\"created\\\">\"\n        ],\n        \"value\": \"<base64 ScVal: AccountCreated map>\",\n        \"inSuccessfulContractCall\": true,\n        \"txHash\": \"<hex>\",\n        \"ledger\": \"<decimal string>\",\n        \"createdAt\": \"<RFC 3339 timestamp>\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "20 - SweepController (read-only)",
+      "description": "Probes against a single SweepController deployment. can_sweep is controller-scoped and takes the child account address as an ScAddress argument; get_nonce returns the GLOBAL nonce for the deployment, which is the value any signature must be built over. Neither can change state.",
+      "item": [
+        {
+          "name": "can_sweep",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"simulateTransaction\",\n  \"params\": {\n    \"transaction\": \"{{txEnvelopeCanSweep}}\",\n    \"resourceConfig\": {\n      \"resourceFee\": \"100\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{rpcUrl}}",
+              "host": [
+                "{{rpcUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "READ-ONLY. This request cannot change state: it is a simulation of a getter, and simulateTransaction never includes a transaction in a ledger. No signature is required or wanted, and the source account on the envelope must be inactive.\n\nSource: contracts/ephemeral_account/src/lib.rs. The signature is quoted in the SCVal arguments line below - check it against the file before you build the envelope.\n\nSCVal arguments: [{\"address\": \"{{ephemeralAccountId}}\"}]  - ONE ScAddress argument: the CHILD account contract ID (C...). This is the argument people get wrong; note that testnet/docs/soroban-cli-quickref.md shows the equivalent CLI call as `can_sweep --account ...`, but the Rust parameter is named `ephemeral_account`.\n\nSignature: pub fn can_sweep(env: Env, ephemeral_account: Address) -> bool\n\nReturns: a bool ScVal. True iff a payment is recorded AND status is PaymentReceived AND the account is not expired.\n\nTWO THINGS TO KNOW. First, it is a method on the CONTROLLER, and it answers a different question from is_expired: it is the controller's view of whether it could sweep that account right now. Second, for an UNINITIALIZED child it does not return false - it calls get_info() through a generated contractimport! client, and that client unwraps the child's Result, so the whole invocation fails. Treat an error here as 'the child is not usable', never as 'the child is not ready'.\n\nA true here is still not a guarantee your sweep succeeds: the controller's nonce is GLOBAL, not per account, and a signature is bound to (destination, nonce, controller) - not to the account. See testnet/config/nonce-tracking.md.\n\n\n\nEnvelope: build the base64 XDR TransactionEnvelope yourself and put it in the `%s` collection variable. See the collection description."
+          },
+          "response": [
+            {
+              "name": "ILLUSTRATIVE SAMPLE - hand-written from source, NOT captured from a live node - bool in result.results[0].xdr",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{rpcUrl}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\n    \"jsonrpc\": \"2.0\",\n    \"id\": 1,\n    \"result\": {\n      \"latestLedger\": \"<decimal string>\",\n      \"error\": \"\",\n      \"transactionData\": \"<base64 XDR of the simulated transaction>\",\n      \"minResourceFee\": \"<decimal string, in stroops>\",\n      \"events\": [],\n      \"results\": [\n        {\n          \"auth\": [],\n          \"xdr\": \"<base64 XDR ScVal: the return value>\"\n        }\n      ],\n      \"cost\": {\n        \"cpuInsns\": \"<decimal string>\",\n        \"memBytes\": \"<decimal string>\"\n      }\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "get_nonce",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"simulateTransaction\",\n  \"params\": {\n    \"transaction\": \"{{txEnvelopeGetNonce}}\",\n    \"resourceConfig\": {\n      \"resourceFee\": \"100\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{rpcUrl}}",
+              "host": [
+                "{{rpcUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "READ-ONLY. This request cannot change state: it is a simulation of a getter, and simulateTransaction never includes a transaction in a ledger. No signature is required or wanted, and the source account on the envelope must be inactive.\n\nSource: contracts/ephemeral_account/src/lib.rs. The signature is quoted in the SCVal arguments line below - check it against the file before you build the envelope.\n\nSCVal arguments: []  - get_nonce(env) takes NO arguments\n\nSignature: pub fn get_nonce(env: Env) -> u64\n\nReturns: a u64 ScVal. Read it IMMEDIATELY before signing, and hold a per-controller lock across read-sign-submit.\n\nThe nonce is global to this controller deployment, shared by every account it services. It starts at 0 and is incremented in sweep_account(), which is the path execute_sweep takes. The digest a signature must cover is SHA256(destination.to_xdr() || nonce as 8-byte BIG-ENDIAN || controller_id.to_xdr()) - the account is not in it, so the nonce is the only replay boundary. See docs/SIGNATURE_FORMAT.md.\n\nCarry it as a number or a decimal string, never a float (testnet/tooling/nonce-inspector-spec.md). And a 0 is not proof of initialization: the storage getter also returns 0 when the key is absent.\n\n\n\nEnvelope: build the base64 XDR TransactionEnvelope yourself and put it in the `%s` collection variable. See the collection description."
+          },
+          "response": [
+            {
+              "name": "ILLUSTRATIVE SAMPLE - hand-written from source, NOT captured from a live node - u64 in result.results[0].xdr",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{rpcUrl}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\n    \"jsonrpc\": \"2.0\",\n    \"id\": 1,\n    \"result\": {\n      \"latestLedger\": \"<decimal string>\",\n      \"error\": \"\",\n      \"transactionData\": \"<base64 XDR of the simulated transaction>\",\n      \"minResourceFee\": \"<decimal string, in stroops>\",\n      \"events\": [],\n      \"results\": [\n        {\n          \"auth\": [],\n          \"xdr\": \"<base64 XDR ScVal: the return value>\"\n        }\n      ],\n      \"cost\": {\n        \"cpuInsns\": \"<decimal string>\",\n        \"memBytes\": \"<decimal string>\"\n      }\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "getEvents (sweep / dest_auth / dest_upd)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"getEvents\",\n  \"params\": {\n    \"startLedger\": \"{{startLedger}}\",\n    \"endLedger\": \"{{startLedger}}\",\n    \"filters\": [\n      {\n        \"type\": \"contract\",\n        \"contractIds\": [\n          \"{{sweepControllerId}}\"\n        ],\n        \"topics\": [\n          [\n            \"sweep\"\n          ],\n          [\n            \"dest_auth\"\n          ],\n          [\n            \"dest_upd\"\n          ]\n        ]\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{rpcUrl}}",
+              "host": [
+                "{{rpcUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "Soroban RPC method `getEvents` against the controller.\n\n  sweep      SweepCompleted { ephemeral_account, destination, amount }\n  dest_auth  DestinationAuthorized { destination }   - initialize with a locked destination\n  dest_upd   DestinationUpdated { old_destination, new_destination }\n\nPer testnet/registry/event-topics.md.\n\nDO NOT count these events to derive the nonce. testnet/runbooks/nonce-desync.md records that a `sweep` event can be emitted by more than one controller path in the current source, so `get_nonce()` is the only authority.\n\nRead-only RPC query: cannot change state."
+          },
+          "response": [
+            {
+              "name": "ILLUSTRATIVE SAMPLE - hand-written from source, NOT captured from a live node - SweepCompleted event",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{rpcUrl}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\n    \"events\": [\n      {\n        \"type\": \"contract\",\n        \"contractId\": \"<C...>\",\n        \"topic\": [\n          \"<base64 ScSymbol \\\"sweep\\\">\"\n        ],\n        \"value\": \"<base64 ScVal: SweepCompleted map>\",\n        \"inSuccessfulContractCall\": true,\n        \"txHash\": \"<hex>\",\n        \"ledger\": \"<decimal string>\",\n        \"createdAt\": \"<RFC 3339 timestamp>\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "30 - ReserveContract (read-only)",
+      "description": "Probes against ReserveContract. Note that get_base_reserve returns an Option<i128> and is {\"void\": null} when unset - that is deliberate, so nobody silently consumes a zero. ReserveContract is recorded as not deployed and not wired into EphemeralAccount, so a change here does not currently change sweep behaviour.",
+      "item": [
+        {
+          "name": "has_base_reserve",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"simulateTransaction\",\n  \"params\": {\n    \"transaction\": \"{{txEnvelopeHasBaseReserve}}\",\n    \"resourceConfig\": {\n      \"resourceFee\": \"100\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{rpcUrl}}",
+              "host": [
+                "{{rpcUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "READ-ONLY. This request cannot change state: it is a simulation of a getter, and simulateTransaction never includes a transaction in a ledger. No signature is required or wanted, and the source account on the envelope must be inactive.\n\nSource: contracts/ephemeral_account/src/lib.rs. The signature is quoted in the SCVal arguments line below - check it against the file before you build the envelope.\n\nSCVal arguments: []  - has_base_reserve(env) takes NO arguments\n\nSignature: pub fn has_base_reserve(env: Env) -> bool\n\nReturns: a bool ScVal. Cheaper than get_base_reserve when only presence matters.\n\nReserveContract is recorded as NOT deployed and NOT wired into EphemeralAccount, which uses a hardcoded BASE_RESERVE_STROOPS of 1_000_000_000. A change here does not currently change sweep behaviour. See testnet/registry/reserve-contract-status.md.\n\n\n\nEnvelope: build the base64 XDR TransactionEnvelope yourself and put it in the `%s` collection variable. See the collection description."
+          },
+          "response": [
+            {
+              "name": "ILLUSTRATIVE SAMPLE - hand-written from source, NOT captured from a live node - bool in result.results[0].xdr",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{rpcUrl}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\n    \"jsonrpc\": \"2.0\",\n    \"id\": 1,\n    \"result\": {\n      \"latestLedger\": \"<decimal string>\",\n      \"error\": \"\",\n      \"transactionData\": \"<base64 XDR of the simulated transaction>\",\n      \"minResourceFee\": \"<decimal string, in stroops>\",\n      \"events\": [],\n      \"results\": [\n        {\n          \"auth\": [],\n          \"xdr\": \"<base64 XDR ScVal: the return value>\"\n        }\n      ],\n      \"cost\": {\n        \"cpuInsns\": \"<decimal string>\",\n        \"memBytes\": \"<decimal string>\"\n      }\n    }\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "get_base_reserve (Option, not a bare value)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"simulateTransaction\",\n  \"params\": {\n    \"transaction\": \"{{txEnvelopeGetBaseReserve}}\",\n    \"resourceConfig\": {\n      \"resourceFee\": \"100\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{rpcUrl}}",
+              "host": [
+                "{{rpcUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "READ-ONLY. This request cannot change state: it is a simulation of a getter, and simulateTransaction never includes a transaction in a ledger. No signature is required or wanted, and the source account on the envelope must be inactive.\n\nSource: contracts/ephemeral_account/src/lib.rs. The signature is quoted in the SCVal arguments line below - check it against the file before you build the envelope.\n\nSCVal arguments: []  - get_base_reserve(env) takes NO arguments\n\nSignature: pub fn get_base_reserve(env: Env) -> Option<i128>\n\nReturns: an Option<i128> ScVal. Stored value decodes to a decimal STRING (stroops). When nothing has been stored the ScVal is {\"void\": null} - NOT zero.\n\nThat distinction is the contract's own doc comment: the Option-returning form exists so consumers must handle the unset case explicitly and cannot silently consume a zero or a garbage value. Prefer it to require_base_reserve, which returns the error ReserveNotSet (code 2) instead.\n\nCeiling if you ever set one: 100_000_000_000 stroops = 10,000 XLM (AmountTooLarge, code 6).\n\n\n\nEnvelope: build the base64 XDR TransactionEnvelope yourself and put it in the `%s` collection variable. See the collection description."
+          },
+          "response": [
+            {
+              "name": "ILLUSTRATIVE SAMPLE - hand-written from source, NOT captured from a live node - Option<i128> in result.results[0].xdr",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{rpcUrl}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\n    \"jsonrpc\": \"2.0\",\n    \"id\": 1,\n    \"result\": {\n      \"latestLedger\": \"<decimal string>\",\n      \"error\": \"\",\n      \"transactionData\": \"<base64 XDR of the simulated transaction>\",\n      \"minResourceFee\": \"<decimal string, in stroops>\",\n      \"events\": [],\n      \"results\": [\n        {\n          \"auth\": [],\n          \"xdr\": \"<base64 XDR ScVal: the return value>\"\n        }\n      ],\n      \"cost\": {\n        \"cpuInsns\": \"<decimal string>\",\n        \"memBytes\": \"<decimal string>\"\n      }\n    }\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "40 - AccountFactory (read-only)",
+      "description": "AccountFactory has no errors.rs and drops per-account error detail, returning error: None on every failure. Only batch_initialize_count is here, because it only counts. The deploying methods (batch_initialize, batch_initialize_paginated) are excluded deliberately and must not be added to a collection described as read-only. See testnet/runbooks/account-factory-batch-failure.md.",
+      "item": [
+        {
+          "name": "batch_initialize_count (the only safe factory call)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"method\": \"simulateTransaction\",\n  \"params\": {\n    \"transaction\": \"{{txEnvelopeBatchInitializeCount}}\",\n    \"resourceConfig\": {\n      \"resourceFee\": \"100\"\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{rpcUrl}}",
+              "host": [
+                "{{rpcUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "READ-ONLY. This request cannot change state: it is a simulation of a getter, and simulateTransaction never includes a transaction in a ledger. No signature is required or wanted, and the source account on the envelope must be inactive.\n\nSource: contracts/ephemeral_account/src/lib.rs. The signature is quoted in the SCVal arguments line below - check it against the file before you build the envelope.\n\nSCVal arguments: A JSON ARRAY of AccountInitRequest maps. Each element is a struct, i.e. a JSON object keyed by field name, with an u32 and an Address:\n  [{\"expiry_ledger\": {\"u32\": \"1234567\"},\n    \"recovery_address\": {\"address\": \"{{readOnlySource}}\"}}]\nNote the u32 is a decimal STRING. The argument is named `requests` and it is a VEC, so an empty [] is valid and returns 0.\n\nThe `_env` parameter in the signature is unused - it exists for interface consistency with the other methods.\n\nSignature: pub fn batch_initialize_count(_env: Env, requests: Vec<AccountInitRequest>) -> u32\n\nReturns: a u32 ScVal: how many accounts WOULD be created. It deploys nothing and initializes nothing, which is exactly why it is the only AccountFactory method in this collection.\n\nbatch_initialize and batch_initialize_paginated are EXCLUDED DELIBERATELY: they deploy contracts and are not read-only. Do not add them to a collection described as read-only. If you must use them, read testnet/runbooks/account-factory-batch-failure.md first - AccountFactory has no errors.rs and drops the per-account error detail, returning `error: None` on every failure.\n\n\n\nEnvelope: build the base64 XDR TransactionEnvelope yourself and put it in the `%s` collection variable. See the collection description."
+          },
+          "response": [
+            {
+              "name": "ILLUSTRATIVE SAMPLE - hand-written from source, NOT captured from a live node - u32 in result.results[0].xdr",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{rpcUrl}}"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": 1,\n  \"result\": {\n    \"jsonrpc\": \"2.0\",\n    \"id\": 1,\n    \"result\": {\n      \"latestLedger\": \"<decimal string>\",\n      \"error\": \"\",\n      \"transactionData\": \"<base64 XDR of the simulated transaction>\",\n      \"minResourceFee\": \"<decimal string, in stroops>\",\n      \"events\": [],\n      \"results\": [\n        {\n          \"auth\": [],\n          \"xdr\": \"<base64 XDR ScVal: the return value>\"\n        }\n      ],\n      \"cost\": {\n        \"cpuInsns\": \"<decimal string>\",\n        \"memBytes\": \"<decimal string>\"\n      }\n    }\n  }\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "90 - Notes and Related Documentation",
+      "description": "This folder is deliberately empty. It is the \"read me first\" page of the\ncollection, kept as a folder because Postman renders folder descriptions above\ntheir contents.\n\n## What this collection is\n\nA set of READ-ONLY probes against the four Bridgelet contracts, for integrators\nwho would rather poke at the JSON-RPC API than write SDK code first.\n\n| Folder | What it covers |\n|---|---|\n| 00 - Node health | getHealth, getLatestLedger. Run this first. |\n| 10 - EphemeralAccount | is_expired, get_status, get_info, simulate_sweep, get_payment_count, getEvents |\n| 20 - SweepController | can_sweep, get_nonce, getEvents |\n| 30 - ReserveContract | has_base_reserve, get_base_reserve |\n| 40 - AccountFactory | batch_initialize_count only |\n\n## The three rules\n\n1. **Nothing here can change state.** Every request is a plain RPC query or a\n   `simulateTransaction` of a getter. The simulator does not include a\n   transaction in a ledger. Nothing signs. The deploying methods\n   (batch_initialize, batch_initialize_paginated) are excluded on purpose.\n2. **Every saved response is hand-written.** They were derived from the\n   contract source, not captured from a node. Nothing is deployed, so no\n   captured response could exist. Treat them as shape references.\n3. **You must supply the transaction envelopes.** Soroban RPC has no\n   convenience contract-call endpoint, so each `simulateTransaction` takes a\n   base64 XDR TransactionEnvelope that your own builder must produce. Fill in\n   the `txEnvelope*` collection variables.\n\n## Before you trust any of it\n\n- Verify every contract ID. testnet/registry/contract-status.md currently\n  records all four contracts as UNDEPLOYED with IDs \"TBD\" and\n  `Last Verified: Never`. The IDs in deployments/testnet.json and\n  deployment-artifacts/contract-ids.txt come from a 2026-07-12 deployment and\n  are unverified.\n- Use the Testnet network passphrase, spaces around the semicolon included.\n- Never put a secret key or an Ed25519 signing seed in this collection, in a\n  URL, or in a log. Read-only probes do not need one; if your envelope builder\n  has a key in scope, take it out of scope.\n\n## Reading the results\n\n`result.results[0].xdr` is a base64 ScVal. In the JavaScript SDK,\n`scValToNative` decodes it. Remember: i128 and u64 arrive as decimal strings,\nnot numbers, and an unset Option<i128> is `{\"void\": null}`, not `0`.\n\n## Companion documents\n\n- testnet/examples/checking-account-status.md - what each probe proves, and what it does not\n- testnet/examples/error-handling.md - contract error discriminants to domain meaning\n- testnet/examples/idempotency-considerations.md - duplicate submissions and safe retries\n- testnet/examples/README.md - the CLI equivalents of every request here\n- docs/api-reference.md - the authoritative interface\n- testnet/registry/event-topics.md - event topic encoding\n- testnet/docs/network-config.md - endpoints and passphrase\n- testnet/registry/contract-status.md - deployment status\n\n## Version history\n\n| Version | Date | Changes |\n|---|---|---|\n| 1.0 | 2026-09-26 | Initial read-only Soroban RPC collection, written from source, pending a live endpoint to validate |\n",
+      "item": []
+    }
+  ]
+}
