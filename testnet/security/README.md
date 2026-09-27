@@ -36,6 +36,9 @@ Testnet is usually dismissed as "not real", so the instinct is that it does not 
 | [`unverified-signature-path-warning.md`](unverified-signature-path-warning.md) | `EphemeralAccount::sweep()` does not verify its signature | Before test-calling `sweep()` directly, or when reasoning about whether signature checking works |
 | [`admin-key-hygiene.md`](admin-key-hygiene.md) | Handling the testnet deployer/admin key | You hold, are about to hold, or are reviewing the testnet admin key |
 | [`known-testnet-abuse-patterns.md`](known-testnet-abuse-patterns.md) | What griefing the shared deployment looks like, and the contract behaviour each produces | Testnet behaves unexpectedly and you need to decide "broken" vs "someone is messing with shared state" |
+| [`disclosure-process.md`](disclosure-process.md) | How to report a security-relevant finding found while testing against testnet | You have found something and do not know where to send it, or what must not be posted publicly |
+| [`reentrancy-observation-log.md`](reentrancy-observation-log.md) | Append-only log of investigated reentrancy-adjacent transactions, including false alarms | You have investigated a transaction that looked reentrancy-adjacent, and the result needs recording |
+| [`dependency-audit-notes.md`](dependency-audit-notes.md) | The SDK/CLI version pairing behind the deployed artifacts, and how to triage an SDK advisory | An SDK advisory or behaviour change lands and someone must decide whether testnet is in range |
 
 ## Standing rules for this directory
 
