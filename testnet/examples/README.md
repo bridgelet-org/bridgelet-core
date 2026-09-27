@@ -49,6 +49,10 @@ export XLM_SAC="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 | [Pay and record](#pay-and-record) | Transfer native XLM, then record it in contract state | State-changing |
 | [Authorize and sweep](#authorize-and-sweep) | Submit a signed `SweepController::execute_sweep` | State-changing |
 | [Inspect events and balances](#inspect-events-and-balances) | Correlate events with the final terminal state | Read-only |
+| [Pre-flight account status checks](checking-account-status.md) | Gate a state-changing call on `is_expired`, `get_info` and `can_sweep` | Read-only |
+| [Error handling](error-handling.md) | Map each contract error discriminant to handling code | Read-only |
+| [Idempotency considerations](idempotency-considerations.md) | Reason about a duplicate sweep and the one safe retry | Read-only |
+| [Postman RPC collection](postman-collection.json) | Raw `simulateTransaction` probes for Postman/HTTP | Read-only |
 
 ## Read account state
 
