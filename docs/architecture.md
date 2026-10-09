@@ -48,7 +48,7 @@ The workspace (`Cargo.toml`) declares five members — four deployable contracts
 ```
 contracts/
 ├── ephemeral_account/   # Per-transfer temporary account + state machine
-├── sweep_controller/    # Signature verification + token transfer execution
+├── sweep_controller/    # Signature/claim verification + sweep authorization
 ├── reserve_contract/    # Standalone base-reserve config store
 ├── account_factory/     # Batch deployer/initializer for ephemeral_account
 └── shared/               # Common types (Payment, AccountStatus, AccountInfo, ...)
@@ -73,12 +73,15 @@ contracts/
                                     │    SweepController     │
                                     │  verifies Ed25519 sig,  │
                                     │  calls back into the    │
-                                    │  account, then executes │
-                                    │  SEP-41 token transfers  │
-                                    └───────────┬────────────┘
-                                                │ TokenClient.transfer()
-                                                ▼
-                                        SEP-41 token contracts
+                                    │  account to mark it     │
+                                    │  swept; does NOT move   │
+                                    │  tokens itself          │
+                                    └───────────────────────┘
+
+   Funds sit on each ephemeral account's classic `G...` address (the sender
+   paid it via Horizon); after the controller marks the account swept, the
+   SDK performs the custodial payout with a classic Horizon payment. The
+   controller never calls `TokenClient` and holds no balance.
 
    ┌─────────────────────┐
    │   ReserveContract     │  standalone config contract — stores an
@@ -103,7 +106,8 @@ contracts/
 #### SweepController (On-Chain, implemented)
 - Independently verifies Ed25519 signatures over `hash(destination + nonce + contract_id)`
 - Enforces nonce-based replay protection
-- Executes the actual SEP-41 `transfer()` calls for every recorded payment
+- Authorizes the sweep and marks the account swept; it does **not** move tokens
+  (the SDK performs the classic Horizon payout — see Transfer Mechanism below)
 - Optionally locks all sweeps to one pre-set destination address
 
 #### ReserveContract (On-Chain, implemented, currently standalone)
@@ -195,7 +199,7 @@ Note: `InvalidSignature` (9) exists in the error enum but `sweep()`'s current im
 
 ### SweepController Contract
 
-**Source:** `contracts/sweep_controller/src/lib.rs`, `authorization.rs`, `transfers.rs`
+**Source:** `contracts/sweep_controller/src/lib.rs`, `authorization.rs`
 
 This is where real cryptographic authorization lives.
 
@@ -231,9 +235,11 @@ fn update_authorized_destination(env: Env, new_destination: Address) -> Result<(
 3. On success, `execute_sweep()` increments the nonce (replay protection) *before* calling into `EphemeralAccount`.
 4. Uses `env.authorize_as_current_contract()` with a `SubContractInvocation` context so that the downstream `EphemeralAccount::sweep()` call satisfies its `authorized_controller.require_auth()` check.
 
-#### Transfer Mechanism (implemented, not planned)
+#### Payout Mechanism (custodial, off-chain)
 
-`transfers::execute_transfers()` iterates every `Payment` returned by `EphemeralAccount::get_info()` and calls `TokenClient::new(env, &payment.asset).transfer(from, destination, &payment.amount)` for each — atomic multi-asset sweep in one call.
+The controller does **not** transfer tokens. `sweep_account()` verifies the signature and nonce, calls `EphemeralAccount::sweep()`, emits `SweepCompleted`, and returns. The recorded payments are bookkeeping only: the sender funds each ephemeral account's classic `G...` address via Horizon, so the contract holds no balance. The SDK's `SweepsService` performs the actual payout with a classic Horizon payment after the sweep is confirmed.
+
+This is why the controller can never call `TokenClient::transfer(from = <ephemeral contract>, ...)`: a contract must authorize its own outgoing transfer (which `EphemeralAccount::sweep()` never does) and the funds are not on the contract anyway. Doing so would also double-pay the SDK's payout.
 
 #### `claim()` — gas-free path
 `recipient.require_auth()` (Soroban native auth on the outer transaction) replaces the Ed25519 signature entirely; the controller then authorizes itself as invoker of `EphemeralAccount::sweep_claim()`. This lets a relayer submit and pay fees while only the recipient signs.
@@ -242,7 +248,7 @@ fn update_authorized_destination(env: Env, new_destination: Address) -> Result<(
 If `authorized_destination` was set at `initialize()`, every `execute_sweep`/`claim` call is checked against it (`validate_destination`) and can be changed via `update_authorized_destination()` — but only before any sweep has occurred (`nonce == 0` check).
 
 #### Errors
-`InvalidAccount, TransferFailed, AuthorizationFailed, InsufficientBalance, AccountNotReady, AccountExpired, AccountAlreadySwept, InvalidSignature, SignatureVerificationFailed, AuthorizedSignerNotSet, InvalidNonce, UnauthorizedDestination` (discriminant `12` is unused/skipped — likely a removed variant; harmless in Rust but worth a cleanup pass).
+`InvalidAccount, TransferFailed, AuthorizationFailed, InsufficientBalance, AccountNotReady, AccountExpired, AccountAlreadySwept, InvalidSignature, SignatureVerificationFailed, AuthorizedSignerNotSet, InvalidNonce, UnauthorizedDestination` (discriminant `12` is unused/skipped — likely a removed variant; harmless in Rust but worth a cleanup pass). `TransferFailed` is no longer produced by any code path now that the controller does not move tokens.
 
 ---
 
@@ -304,10 +310,10 @@ Deploys a new `ephemeral_account` instance per request via `env.deployer().with_
 SDK observes inbound payment via Horizon → calls `record_payment(amount, asset)` → status becomes `PaymentReceived`.
 
 ### Sweep (signed path)
-SDK/relayer builds `hash(destination ++ nonce ++ sweep_controller_address)`, signs with the private key matching `authorized_signer` → calls `SweepController::execute_sweep(ephemeral_account, destination, signature)` → controller verifies signature, authorizes itself as invoker, calls `EphemeralAccount::sweep()` → controller reads `get_info()`, executes token transfers → `EphemeralAccount` reclaims its internal reserve tracking.
+SDK/relayer builds `hash(destination ++ nonce ++ sweep_controller_address)`, signs with the private key matching `authorized_signer` → calls `SweepController::execute_sweep(ephemeral_account, destination, signature)` → controller verifies signature, authorizes itself as invoker, calls `EphemeralAccount::sweep()` → controller reads `get_info()` and emits `SweepCompleted` (no token transfer) → `EphemeralAccount` reclaims its internal reserve tracking. The SDK then pays out the funds from the ephemeral account's classic `G...` address via a classic Horizon payment.
 
 ### Sweep (gas-free claim path)
-Recipient signs a Soroban auth entry for `SweepController::claim(recipient, ephemeral_account)` → relayer submits and pays fees → controller authorizes itself as invoker of `EphemeralAccount::sweep_claim()` → same transfer/reserve-reclaim tail as above.
+Recipient signs a Soroban auth entry for `SweepController::claim(recipient, ephemeral_account)` → relayer submits and pays fees → controller authorizes itself as invoker of `EphemeralAccount::sweep_claim()` → same no-token-transfer, reserve-reclaim, then off-chain payout tail as above.
 
 ### Expiration
 Past `expiry_ledger` with no sweep → anyone calls `expire()` (or `recover()`) → funds path returns to `recovery_address`.

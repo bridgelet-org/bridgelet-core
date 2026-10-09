@@ -82,7 +82,7 @@ fn record_payment(env: Env, amount: i128, asset: Address) -> Result<(), Error>
 
 #### `sweep`
 
-Marks the account as swept and authorizes fund transfers to `destination`. All recorded payments are included. The actual token transfers are executed by `SweepController` after this call completes.
+Marks the account as swept and records `destination` as the payout target. All recorded payments are included. No token transfer happens here or in `SweepController`: the sender funds the ephemeral account's classic `G...` address via Horizon and the SDK performs the classic payment payout afterwards.
 
 ```rust
 fn sweep(
@@ -389,7 +389,7 @@ fn simulate_sweep_paginated(env: Env, destination: Address, params: PaginationPa
 
 ## SweepController Contract
 
-Orchestrates sweep authorization using Ed25519 signature verification and executes atomic token transfers.
+Orchestrates sweep authorization using Ed25519 signature verification and authorizes the ephemeral account's sweep. It does not move tokens itself; the SDK performs the custodial payout.
 
 ### Functions
 
@@ -428,7 +428,7 @@ fn initialize(
 
 #### `execute_sweep`
 
-Verifies the Ed25519 authorization signature, then calls `EphemeralAccount::sweep()` and executes the token transfers to `destination`.
+Verifies the Ed25519 authorization signature, then calls `EphemeralAccount::sweep()` and emits `SweepCompleted`. It does **not** transfer tokens: the funds live on the ephemeral account's classic `G...` address, not on any contract, and the SDK performs the classic Horizon payout afterwards.
 
 ```rust
 fn execute_sweep(
@@ -456,7 +456,6 @@ fn execute_sweep(
 | `AuthorizedSignerNotSet` | Ed25519 public key has not been stored. |
 | `SignatureVerificationFailed` | Signature does not verify against the current nonce and destination. |
 | `AccountNotReady` | Ephemeral account has no recorded payments or zero total amount. |
-| `TransferFailed` | A SEP-41 token `transfer()` call failed. |
 
 **Signature message format:**
 
@@ -631,7 +630,8 @@ fn example_multi_asset(
     ephemeral.record_payment(&100_000_000, usdc_addr);
     ephemeral.record_payment(&5_000_000_000, xlm_addr); // 500 XLM in stroops
 
-    // Sweep transfers ALL recorded assets atomically
+    // Sweep marks the account swept for ALL recorded assets; the SDK pays the
+    // funds out from the ephemeral account's classic G... address afterwards.
     controller.execute_sweep(ephemeral_id, destination, &auth_sig);
 }
 ```
