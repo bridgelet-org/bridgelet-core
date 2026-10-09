@@ -13,7 +13,7 @@ The workspace contains **four** contracts, not two or three as earlier drafts of
 | Contract | Purpose |
 |---|---|
 | `ephemeral_account` | Enforces single-payment, expiry, and sweep-authorization state machine for a temporary account |
-| `sweep_controller` | Validates Ed25519-signed sweep authorization and executes SEP-41 token transfers |
+| `sweep_controller` | Validates Ed25519-signed sweep authorization and marks the account swept; the SDK performs the custodial payout |
 | `reserve_contract` | Stores/serves the network base-reserve amount (admin-set config value) used by `ephemeral_account` when reclaiming reserve |
 | `account_factory` | Batch-deploys and initializes many `ephemeral_account` instances in one transaction |
 
@@ -25,7 +25,7 @@ The workspace contains **four** contracts, not two or three as earlier drafts of
 |----------|----------|--------|-------|
 | `verify_sweep_authorization` | `EphemeralAccount` | **Not a real signature check** | Ignores the `auth_signature` argument entirely (parameter is prefixed `_`). Authorization instead comes from `authorized_controller.require_auth()` - i.e. it trusts whichever address was set as the controller at `initialize()`. Calling `sweep()` directly (not via `SweepController`) will fail `require_auth` for anyone who isn't that controller, but it performs **no cryptographic verification of the signature itself**. |
 | `verify_sweep_auth` | `SweepController` | **Fully implemented** | Real Ed25519 verification (`env.crypto().ed25519_verify`) over `hash(destination + nonce + contract_id)`, with nonce-based replay protection. |
-| `execute_transfers` | `SweepController` | **Fully implemented** | Calls SEP-41 `TokenClient::transfer()` for every recorded payment. |
+| `sweep_account` | `SweepController` | **Fully implemented** | Verifies the signature/nonce, authorizes and marks the account swept, emits `SweepCompleted`. Does **not** move tokens - the SDK performs the custodial payout via Horizon. |
 | `batch_initialize` | `AccountFactory` | **Implemented, error detail dropped** | On per-account init failure it returns `error: None` instead of the actual error - see `lib.rs` comment `"In a real implementation, we'd serialize errors"`. Caller can see *that* an account failed but not *why*. |
 
 ### Implementation Notes

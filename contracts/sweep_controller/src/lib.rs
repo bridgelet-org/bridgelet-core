@@ -3,7 +3,6 @@
 mod authorization;
 mod errors;
 mod storage;
-mod transfers;
 
 mod ephemeral_account_contract {
     soroban_sdk::contractimport!(
@@ -18,7 +17,7 @@ use soroban_sdk::{
 };
 
 use authorization::AuthContext;
-use bridgelet_shared::{AccountStatus, Payment};
+use bridgelet_shared::AccountStatus;
 pub use errors::Error;
 
 #[contract]
@@ -76,7 +75,6 @@ impl SweepController {
     /// # Errors
     /// Returns Error::AuthorizationFailed if signature is invalid
     /// Returns Error::InvalidAccount if account is not in valid state
-    /// Returns Error::TransferFailed if token transfer fails
     /// Returns Error::UnauthorizedDestination if destination doesn't match authorized destination (when set)
     pub fn execute_sweep(
         env: Env,
@@ -182,28 +180,15 @@ impl SweepController {
             return Err(Error::AccountNotReady);
         }
 
-        // Execute the actual token transfers for all recorded payments.
+        // No token transfer happens here. The controller only validates state
+        // and authorizes the sweep; the funds live on the ephemeral account's
+        // classic `G...` address (the sender paid it via Horizon), not on this
+        // contract. The SDK performs the custodial payout afterwards with a
+        // classic Horizon payment. Any SEP-41 transfer from here would both be
+        // unauthorized (the contract never authorizes its own outgoing
+        // transfer) and double-pay the SDK's payout.
         //
-        // info.payments yields ephemeral_account_contract::Payment (the
-        // contractimport!-generated type) — structurally identical to
-        // bridgelet_shared::Payment but a distinct Rust type, since
-        // contractimport! derives its own types from the wasm's interface
-        // metadata rather than reusing the shared crate. Convert explicitly
-        // field-by-field; transfers::execute_transfers expects the
-        // bridgelet_shared version.
-        let mut payments_vec = Vec::new(env);
-        for payment in info.payments.iter() {
-            payments_vec.push_back(Payment {
-                asset: payment.asset.clone(),
-                amount: payment.amount,
-                timestamp: payment.timestamp,
-            });
-        }
-
-        transfers::execute_transfers(env, &ephemeral_account, &destination, &payments_vec)
-            .map_err(|_| Error::TransferFailed)?;
-
-        // Emit sweep completed event after successful transfer.
+        // Emit sweep completed event after the account state transition succeeds.
         emit_sweep_completed(env, ephemeral_account, destination, amount);
 
         Ok(())

@@ -7,7 +7,7 @@ use soroban_sdk::{
     testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
     Address, BytesN, Env, IntoVal,
 };
-use sweep_controller::{Error, SweepController, SweepControllerClient};
+use sweep_controller::{SweepController, SweepControllerClient};
 
 fn generate_test_keypair(env: &Env) -> (BytesN<32>, BytesN<64>) {
     let public_key = BytesN::from_array(
@@ -81,9 +81,11 @@ fn setup_ready_account(
         );
 
     let asset_id = Address::generate(&env);
-    env.mock_all_auths_allowing_non_root_auth();
+    // `record_payment` is bookkeeping only and requires no authorization, so
+    // call it directly. The claim in each test below then runs with only the
+    // explicit `mock_auths` for the recipient - no blanket auth mocking that
+    // could hide a missing authorization in the sweep path.
     ephemeral_client.record_payment(&100, &asset_id);
-    env.set_auths(&[]);
 
     (controller_client, ephemeral_client, ephemeral_id)
 }
@@ -111,34 +113,67 @@ fn test_initialize_prevents_double_init() {
     assert!(result.is_err());
 }
 
-/// Test that valid signatures are accepted
+/// An invalid signature must be rejected by the sweep path even when every
+/// other authorization is provided explicitly. No `mock_all_auths()` is used
+/// here, so a missing authorization would surface as a failed test.
 #[test]
-fn test_execute_sweep_with_valid_signature() {
+fn test_execute_sweep_rejects_invalid_signature() {
     let env = Env::default();
-    env.mock_all_auths();
 
-    let _creator = Address::generate(&env);
-    // Deploy and initialize controller
+    // Deploy and initialize controller (creator authorizes `initialize` only).
     let controller_id = env.register(SweepController, ());
     let controller_client = SweepControllerClient::new(&env, &controller_id);
 
     let creator = Address::generate(&env);
     let (authorized_signer, _) = generate_test_keypair(&env);
-    controller_client.initialize(&creator, &authorized_signer, &None);
+    controller_client
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &creator,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &controller_id,
+                fn_name: "initialize",
+                args: (&creator, &authorized_signer, &None::<Address>).into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .initialize(&creator, &authorized_signer, &None);
 
-    // Deploy ephemeral account
+    // Deploy ephemeral account.
     let ephemeral_id = env.register(EphemeralAccountContract, ());
     let ephemeral_client = EphemeralAccountContractClient::new(&env, &ephemeral_id);
 
     // Setup
-    let creator = Address::generate(&env);
+    let account_creator = Address::generate(&env);
     let recovery = Address::generate(&env);
     let destination = Address::generate(&env);
     let _asset = Address::generate(&env);
     let expiry = env.ledger().sequence() + 1000;
 
     // Initialize ephemeral account, authorizing this SweepController to call sweep()
-    ephemeral_client.initialize(&creator, &expiry, &recovery, &controller_id, &creator);
+    ephemeral_client
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &account_creator,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &ephemeral_id,
+                fn_name: "initialize",
+                args: (
+                    &account_creator,
+                    &expiry,
+                    &recovery,
+                    &controller_id,
+                    &account_creator,
+                )
+                    .into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .initialize(
+            &account_creator,
+            &expiry,
+            &recovery,
+            &controller_id,
+            &account_creator,
+        );
 
     // Create an invalid signature (all zeros - different from valid signature)
     let invalid_sig = BytesN::from_array(&env, &[0u8; 64]);
@@ -209,6 +244,80 @@ fn test_claim_succeeds_with_recipient_auth_and_relayable_flow() {
     assert_eq!(ephemeral_client.get_status(), AccountStatus::Swept);
     let info = ephemeral_client.get_info();
     assert_eq!(info.swept_to, Some(recipient));
+}
+
+/// The claim path must not proceed when the controller is not the account's
+/// `authorized_controller`. Only the recipient's authorization is mocked here,
+/// so the missing controller authorization has to fail the test.
+#[test]
+fn test_claim_fails_when_account_not_bound_to_controller() {
+    let env = Env::default();
+
+    let controller_id = env.register(SweepController, ());
+    let controller_client = SweepControllerClient::new(&env, &controller_id);
+
+    let creator = Address::generate(&env);
+    let (authorized_signer, _) = generate_test_keypair(&env);
+    controller_client
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &creator,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &controller_id,
+                fn_name: "initialize",
+                args: (&creator, &authorized_signer, &None::<Address>).into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .initialize(&creator, &authorized_signer, &None);
+
+    let ephemeral_id = env.register(EphemeralAccountContract, ());
+    let ephemeral_client = EphemeralAccountContractClient::new(&env, &ephemeral_id);
+
+    let account_creator = Address::generate(&env);
+    let recovery = Address::generate(&env);
+    let other_controller = Address::generate(&env);
+    let expiry = env.ledger().sequence() + 1_000;
+    ephemeral_client
+        .mock_auths(&[soroban_sdk::testutils::MockAuth {
+            address: &account_creator,
+            invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                contract: &ephemeral_id,
+                fn_name: "initialize",
+                args: (
+                    &account_creator,
+                    &expiry,
+                    &recovery,
+                    &other_controller,
+                    &account_creator,
+                )
+                    .into_val(&env),
+                sub_invokes: &[],
+            },
+        }])
+        .initialize(
+            &account_creator,
+            &expiry,
+            &recovery,
+            &other_controller,
+            &account_creator,
+        );
+
+    let asset_id = Address::generate(&env);
+    ephemeral_client.record_payment(&100, &asset_id);
+
+    let recipient = Address::generate(&env);
+    controller_client.mock_auths(&[soroban_sdk::testutils::MockAuth {
+        address: &recipient,
+        invoke: &soroban_sdk::testutils::MockAuthInvoke {
+            contract: &controller_client.address,
+            fn_name: "claim",
+            args: (&recipient, &ephemeral_id).into_val(&env),
+            sub_invokes: &[],
+        },
+    }]);
+
+    let result = controller_client.try_claim(&recipient, &ephemeral_id);
+    assert!(result.is_err());
 }
 
 #[test]
