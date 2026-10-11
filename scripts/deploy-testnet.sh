@@ -1,5 +1,11 @@
 set -euo pipefail
 
+if [ -f .env ]; then
+  set -a
+  source .env
+  set +a
+fi
+
 # ---------------------------------------------------------------------------
 # Bridgelet - Testnet Deployment Script
 # Deploys all four workspace contracts to Stellar testnet and records the
@@ -68,6 +74,13 @@ EPHEMERAL_WASM_HASH=$(stellar contract install \
   --network-passphrase "$NETWORK_PASSPHRASE")
 
 echo "    EphemeralAccount WASM hash: $EPHEMERAL_WASM_HASH"
+
+# or just replace the above if you do not wish to chace the contract address
+# : "${EPHEMERAL_CONTRACT_ID:?EPHEMERAL_CONTRACT_ID must be set}"
+# : "${EPHEMERAL_WASM_HASH:?EPHEMERAL_WASM_HASH must be set}"
+
+# echo "==> Reusing existing EphemeralAccount: $EPHEMERAL_CONTRACT_ID"
+# echo "    EphemeralAccount WASM hash: $EPHEMERAL_WASM_HASH"
 
 # ---------------------------------------------------------------------------
 # SweepController
