@@ -59,7 +59,7 @@ documents are the source of truth for that; this page does not repeat them.
 | [`runbooks/`](runbooks/) | Step-by-step diagnostics for specific failure symptoms | [`README.md`](runbooks/README.md) |
 | [`monitoring/`](monitoring/) | Monitoring **plans** and procedures (not running monitoring) | [`README.md`](monitoring/README.md) |
 | [`security/`](security/) | Operational security observations of the shared deployment | [`README.md`](security/README.md) |
-| [`policies/`](policies/) | Versioning, reset, data retention, breaking-change notice, contribution | none |
+| [`policies/`](policies/) | Versioning, reset, data retention, breaking-change notice, contribution | [`README.md`](policies/README.md) |
 | [`reset/`](reset/) | The announcement template for a redeploy or reset | none |
 | [`tooling/`](tooling/) | Specifications for consumer-side helper tools (not runnable code) | [`README.md`](tooling/README.md) |
 

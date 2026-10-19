@@ -79,7 +79,7 @@ own scope explicitly, and the scope statements differ.
 | `testnet/faucet/` | Funding testnet accounts with Friendbot; rate-limit handling | Yes — `README.md` |
 | `testnet/integration/` | Type mapping between Soroban types and SDK representations | **No** |
 | `testnet/monitoring/` | Monitoring **plans and procedures** — explicitly not running monitoring | Yes — `README.md` |
-| `testnet/policies/` | Process and governance: versioning, data retention, breaking-change notice, this guide | **No** — see open questions |
+| `testnet/policies/` | Process and governance: versioning, data retention, breaking-change notice, this guide | Yes — `README.md` |
 | `testnet/registry/` | The status and ID source of truth: status tables, event topics, upgrade log, verification procedures | Yes — `README.md` |
 | `testnet/reset/` | The announcement template for a redeployment or reset | **No** |
 | `testnet/runbooks/` | Step-by-step diagnostics for specific failure symptoms | Yes — `README.md` |
@@ -370,14 +370,9 @@ confidently.
    `testnet/docs/overview.md`, `testnet/registry/README.md`, and the twelve
    directory READMEs — but no one has decided what the index should be, or
    whether it duplicates them.
-2. **Should `testnet/policies/` gain a `README.md`?** It has none, and the
-   sibling directories `testnet/security/`, `testnet/config/`, `testnet/examples/`,
-   `testnet/monitoring/`, `testnet/runbooks/`, and `testnet/registry/` all do.
-   The asymmetry is probably an oversight rather than a decision, but the fix
-   should be agreed rather than assumed. Note that
-   `testnet/tooling/README.md` is **referenced by
-   `testnet/tooling/decision-log.md` as "the index for this directory" but does
-   not exist** — a real broken reference, worth fixing as part of this.
+2. **Resolved: `testnet/policies/` now has a `README.md`.** It indexes the
+   policies in this directory. Keep its index table in step with new policies
+   (see Workflow, step 4).
 3. **Should the tree gain `testnet/adr/` (architecture decision records)?** The
    tree has exactly one ADR-shaped document,
    `testnet/tooling/decision-log.md`, and it is doing a lot of work in a single
@@ -449,3 +444,4 @@ confidently.
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-09-26 | Initial contribution guide for the `testnet/` documentation tree |
+| 1.1 | 2026-10-18 | `testnet/policies/` gained a `README.md`; open question 2 marked resolved |
