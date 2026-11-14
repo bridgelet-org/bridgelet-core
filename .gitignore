@@ -10,14 +10,11 @@
 *.optimized.wasm
 
 # Environment variables and secrets
-.env
-.env.local
 .env.*.local
 *.secret
 *.key
 
 # IDE/Editor files
-.vscode/
 .idea/
 .qoder/
 *.swp
@@ -72,3 +69,4 @@ deployed-contracts.json
 github/
 
 skills-lock.json
+config.bat
