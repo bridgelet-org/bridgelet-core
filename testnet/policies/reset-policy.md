@@ -13,7 +13,7 @@ promises.
 | Question | Answer as of 2026-09-26 |
 |---|---|
 | Are the contracts deployed? | **No.** All four are undeployed per `testnet/registry/contract-status.md`. Every "current IDs" in the repository is a historical record from a `2026-07-12` deployment, unverified. |
-| Is there a testnet reset cadence? | **No cadence is recorded anywhere in this repository.** The SDF resets testnet periodically; the period is not stated. See [Platform-level reset](#1-platform-level-reset-the-sdf-resets-testnet). |
+| Is there a testnet reset cadence? | **No cadence is recorded anywhere in this repository.** The SDF resets testnet periodically; the period is not stated. See [Platform-level reset](#two-independent-kinds-of-reset). |
 | Is there a notice commitment before a reset? | **No.** See [Advance notice](#advance-notice). |
 | Who may authorise a redeploy? | **Undecided.** No document names an owner. See [Undecided](#undecided). |
 | Can a redeploy be announced outside this repo? | No. Nothing else is monitored. See [Undecided](#undecided). |
