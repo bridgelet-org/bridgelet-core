@@ -164,3 +164,18 @@ Before considering AccountFactory "testnet-ready":
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-09-24 | Initial AccountFactory status tracking |
+
+---
+
+## Definition of done: criteria to appear in contract-status.md
+
+`account_factory` must not be marked as deployed in `testnet/registry/contract-status.md` until every item below is satisfied. This is a tracking checklist only; performing any of these build, CI, deploy, or registry changes is **out of scope for this documentation batch**.
+
+- [ ] **Build script**: `scripts/build.sh` builds `account_factory` (`cargo build --target wasm32-unknown-unknown --release -p account_factory`) so no manual build is required.
+- [ ] **CI coverage**: both workflows include `account_factory` in the test, fmt, clippy, and build steps (`.github/workflows/test.yml` re-enabled; `.github/workflows/deploy-testnet.yml` build step extended).
+- [ ] **Deploy script**: `scripts/deploy-testnet.sh` deploys `account_factory` to testnet and records the resulting contract ID.
+- [ ] **Initialized with WASM hash**: the deployed factory is initialized with the `ephemeral_account` WASM hash, and that hash is recorded.
+- [ ] **Verified live**: a read-only invoke against the factory ID succeeds and a batch operation is exercised per `verify-contract-live.md`.
+- [ ] **Registry updated**: `deployments/testnet.json` and `testnet/registry/contract-status.md` show the deployed ID, WASM hash, and verification date.
+
+Only after all six boxes are checked should the `AccountFactory` row in `contract-status.md` be changed from "not deployed" to deployed.

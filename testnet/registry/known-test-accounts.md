@@ -91,3 +91,30 @@ Example reference:
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-09-24 | Initial known accounts registry template |
+
+---
+
+## Long-lived account nomination form and invariants
+
+The rows below are templates only. Every value is a `PLACEHOLDER`; copy a row when nominating a real account and replace each placeholder with verified values. Do not treat any placeholder as a live address or contract ID.
+
+| Label | Contract ID | Ephemeral account address | expiry_ledger | Purpose | Last checked |
+|---|---|---|---|---|---|
+| PLACEHOLDER (e.g. `demo-screenshots-01`) | PLACEHOLDER (`C...`) | PLACEHOLDER (`G...` account address) | PLACEHOLDER (far-future ledger) | PLACEHOLDER (e.g. screenshots) | PLACEHOLDER (YYYY-MM-DD) |
+| PLACEHOLDER (e.g. `docs-walkthrough-01`) | PLACEHOLDER (`C...`) | PLACEHOLDER (`G...` account address) | PLACEHOLDER (far-future ledger) | PLACEHOLDER (e.g. CLI examples) | PLACEHOLDER (YYYY-MM-DD) |
+
+### Invariants for every nominated account
+
+- **Far-future expiry**: set `expiry_ledger` at least one year out, preferably 10+ years (~63M ledgers), so the account does not lapse during its documentation lifetime.
+- **Never swept**: these accounts must never be swept or have their reserve reclaimed. Do not route them through `SweepController::execute_sweep()` / `claim()` or any sweep runbook.
+- **Labeled non-production**: in every doc, screenshot, or fixture that references one, mark it explicitly as a non-production, test-only account so it is never mistaken for a real user account.
+
+### Quarterly check procedure
+
+Run at least once per quarter, and after any testnet reset:
+
+1. For each row, confirm the contract ID resolves by invoking a read-only method against it (see `testnet/registry/verify-contract-live.md`). If the ID does not resolve, the account was lost in a testnet reset; redeploy and re-nominate it.
+2. Confirm the account has not been swept: invoke its status/read methods and verify it is still `Active` or `PaymentReceived`, not `Swept`.
+3. Confirm `expiry_ledger` is still in the future and comfortably beyond the one-year minimum; extend or replace the account if it is approaching expiry.
+4. Update the `Last checked` cell with the current `YYYY-MM-DD` date.
+5. If any check fails, mark the row as retired, create a replacement per the Creation Procedure above, and update every doc/screenshot that referenced the old account.
