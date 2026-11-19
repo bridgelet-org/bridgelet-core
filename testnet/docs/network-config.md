@@ -4,6 +4,10 @@ Everything an SDK or CLI integrator needs to point at the Bridgelet testnet
 deployment. These values were previously only discoverable inside
 `scripts/deploy-testnet.sh`.
 
+> **Machine-readable copy:** [`testnet/config/network.toml`](../config/network.toml)
+> holds the same network values. Load that file in SDK code and tests
+> instead of copying values from this page.
+
 ## Network endpoints
 
 | Setting | Value |
