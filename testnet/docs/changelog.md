@@ -46,23 +46,51 @@ Deployed commit: `<sha>`
 These changes are on `main` but **not** in the deployed testnet contracts.
 When they ship, they will move into a dated entry.
 
-**Breaking changes (EphemeralAccount):**
-- `initialize` gains an `authorized_signer: BytesN<32>` argument, between
-  `authorized_controller` and `admin`, for a total of six arguments. Existing
-  five-argument calls will fail after redeployment.
-- `initialize` enforces a network-passphrase check. On `main` the expected
-  value is currently the Standalone passphrase, which would reject testnet
-  calls with `Error(Contract, #1007)`. This must be set to the Testnet
-  passphrase before the next testnet deploy.
+**Breaking changes:** none.
 
-**Other changes (EphemeralAccount):**
-- New read-only function `is_initialized() -> bool`.
-- Error codes are namespaced per contract: EphemeralAccount uses
-  1000–1999, SweepController 2000–2999, and ReserveContract 3000–3999.
+**Other changes (EphemeralAccount):** the installed WASM
+(`5e667ea0…c58e`) was built at `741aec2`. Since then `main` has added three
+read-only functions that are **not** callable on testnet yet:
+- `get_info_paginated(params: PaginationParams)`
+- `get_payment_count() -> u32`
+- `simulate_sweep_paginated(...)`
 
-**Action required when this ships:** update your `initialize` calls to pass
-`authorized_signer`, and pick up any new contract IDs from
-`network-config.md`.
+`initialize`, `record_payment` and the error codes (1–15) are unchanged.
+
+**Action required when this ships:** none, unless you want to use the new
+functions.
+
+---
+
+## 2026-10-10: SweepController, ReserveContract and AccountFactory redeployed
+
+Deployed commit: `e7efd55`
+
+**Contract IDs:** three new IDs. EphemeralAccount was **not** redeployed;
+its ID and WASM hash are unchanged.
+
+| Contract | Old ID (no longer used) | New ID |
+|---|---|---|
+| EphemeralAccount | — | `CB7Z22TXR6ZKG7MDXIGJL6QVQQ3L3DQOFR6JV325NZK4CTYWFPVZBBP3` (unchanged) |
+| SweepController | `CBEU4X5MNGOECBSTNEUFMBALH2YI5YV4UIH7YXRNOLR2DNLZQD4Z5KWE` | `CAJB4RRM5JRPXLITC5JUA7Q3LU2WQJDRPXVKMORXWHJJBPZRYWDJ5V4S` |
+| ReserveContract | `CACYMICFLHSPKVMCK336IEGCWAQB4XBC7P7HTJSQY3R7Y2YASE4AX3MS` | `CBG3Y4GWFTL4D37JGV2XWAWC7EUQ7XGH4XM3SFLQYYSKPB2IYMAS54HY` |
+| AccountFactory | `CARBMZY4466SWP3RTN3DR2F4JYNR5UCXD2ICFISV2YI4TS3AAZV2TQ24` | `CDBY4L3NTLW4OBZZTY73VL3NNWO2AGFFGBRJVDL3IMKDDLFF2W57WK6H` |
+
+**Breaking changes:** the old SweepController, ReserveContract and
+AccountFactory IDs are no longer the Bridgelet deployment. Any code or
+config that hard-codes them must be updated. The public signatures of
+`SweepController::initialize`, `execute_sweep` and `claim` are unchanged.
+
+**Other changes:**
+- AccountFactory: new `batch_initialize_paginated(...)` and
+  `batch_initialize_count(requests) -> u32`.
+- SweepController: the public `execute_transfers` helper was removed;
+  transfers now happen inside `execute_sweep` / `claim`.
+
+**Action required:** replace the three old IDs with the new ones listed in
+[network-config.md](network-config.md). If you set an EphemeralAccount's
+`authorized_controller` to the old SweepController ID, deploy a new
+instance pointing at the new ID.
 
 ---
 

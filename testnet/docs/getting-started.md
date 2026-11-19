@@ -12,8 +12,8 @@ Each EphemeralAccount contract instance represents **one** ephemeral
 account, and `initialize()` can be called only once per instance. The shared
 instance `CB7Z22TXR6ZKG7MDXIGJL6QVQQ3L3DQOFR6JV325NZK4CTYWFPVZBBP3` is
 already initialized, so if you call `initialize()` on it you get
-`Error(Contract, #1000)` (`AlreadyInitialized`). And only that instance's
-`authorized_controller` can call `record_payment()` on it.
+`Error(Contract, #1)` (`AlreadyInitialized`). Its expiry ledger has also
+passed, so it is no use for testing payments.
 
 Instead, create a fresh instance from the EphemeralAccount WASM that is
 already installed on testnet. You don't need to build anything:
@@ -30,13 +30,15 @@ initialize(creator: Address, expiry_ledger: u32, recovery_address: Address,
 record_payment(amount: i128, asset: Address) -> Result<(), Error>
 ```
 
-> The `initialize` on `main` also takes an `authorized_signer: BytesN<32>`
-> argument, but that build has not been deployed to testnet yet. Use the
-> five-argument signature above against testnet.
+> This matches `main` as of this writing. If the deployed interface changes,
+> it will be recorded in [changelog.md](changelog.md).
+
+`initialize` must be signed by `creator`. `record_payment` requires no
+signature: the deployed contract does not check who calls it.
 
 In this walkthrough your own key plays every role: creator, recovery
-address, authorized controller and admin. That way you can sign
-`record_payment` yourself. In production, `authorized_controller` is the
+address, authorized controller and admin. In production,
+`authorized_controller` is the
 SweepController contract, which records payments and runs sweeps.
 
 ---
@@ -203,14 +205,13 @@ for example through Horizon, is the caller's job.
 
 | Error | Meaning | Fix |
 |---|---|---|
-| `Error(Contract, #1000)` | `AlreadyInitialized` | You called `initialize` on an instance that was already initialized, such as the shared deployed ID. Deploy your own instance (step 2). |
-| `Error(Contract, #1001)` | `NotInitialized` | Call `initialize` before `record_payment`. |
-| `Error(Contract, #1003)` | `InvalidAmount` | `amount` must be greater than 0. |
-| `Error(Contract, #1004)` | `InvalidExpiry` | `expiry_ledger` must be later than the current ledger. Fetch the latest ledger again and add a margin. |
-| `Error(Contract, #1007)` | `Unauthorized` | The transaction wasn't signed by the `authorized_controller`, or the contract rejected the network. Make sure you are on testnet. |
-| `Error(Contract, #1012)` | `DuplicateAsset` | A payment for this asset is already recorded. Each instance accepts one payment per asset. |
-| `Error(Contract, #1013)` | `TooManyPayments` | An instance holds at most 10 assets. |
-| `Error(Auth, InvalidAction)` | The signer isn't the `creator` (on `initialize`) or the `authorized_controller` (on `record_payment`) | Use the same key you passed for those arguments. |
+| `Error(Contract, #1)` | `AlreadyInitialized` | You called `initialize` on an instance that was already initialized, such as the shared deployed ID. Deploy your own instance (step 2). |
+| `Error(Contract, #2)` | `NotInitialized` | Call `initialize` before `record_payment`. |
+| `Error(Contract, #4)` | `InvalidAmount` | `amount` must be greater than 0. |
+| `Error(Contract, #5)` | `InvalidExpiry` | `expiry_ledger` must be later than the current ledger. Fetch the latest ledger again and add a margin. |
+| `Error(Contract, #13)` | `DuplicateAsset` | A payment for this asset is already recorded. Each instance accepts one payment per asset. |
+| `Error(Contract, #14)` | `TooManyPayments` | An instance holds at most 10 assets. |
+| `Error(Auth, InvalidAction)` | The transaction on `initialize` wasn't signed by `creator` | Sign with the same key you passed as `--creator`. |
 | `txBadSeq` / account not found | The source account isn't funded | Run friendbot again. |
 
 The full list of error codes is in
@@ -219,7 +220,7 @@ The full list of error codes is in
 ## Next steps
 
 - Go through SweepController so that `authorized_controller` is the
-  SweepController contract (`CBEU4X5MNGOECBSTNEUFMBALH2YI5YV4UIH7YXRNOLR2DNLZQD4Z5KWE`)
+  SweepController contract (`CAJB4RRM5JRPXLITC5JUA7Q3LU2WQJDRPXVKMORXWHJJBPZRYWDJ5V4S`)
   rather than your own key. See [docs/api-reference.md](../../docs/api-reference.md).
 - For signing sweep authorizations, see
   [docs/SIGNATURE_FORMAT.md](../../docs/SIGNATURE_FORMAT.md).
