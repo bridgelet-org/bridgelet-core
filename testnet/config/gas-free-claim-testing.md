@@ -350,3 +350,128 @@ echo "Claim test passed!"
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-09-24 | Initial gas-free claim testing guide |
+
+---
+
+## Testnet checklist and verification
+
+This section is a walkthrough for running the two-party (recipient + relayer) flow
+end to end on public testnet. It is additive to the scenarios above: use it as a
+run sheet the first time you exercise `claim()` against a freshly redeployed
+controller. All network values here come from
+[`network.toml`](network.toml); contract IDs come from `deployments/testnet.json`
+or `deployment-artifacts/contract-ids.txt` (and change on every redeploy or
+testnet reset).
+
+### 1. Establish the two identities
+
+Keep the two roles separate so a leaked key in one does not compromise the other.
+The recipient is the account that will be authorized to receive the funds; the
+relayer is the account that submits the transaction and pays its fees.
+
+```bash
+stellar keys generate testnet-recipient --network testnet --fund
+stellar keys generate testnet-relayer   --network testnet --fund
+
+RECIPIENT_ADDR=$(stellar keys address testnet-recipient)
+RELAYER_ADDR=$(stellar keys address testnet-relayer)
+echo "recipient=$RECIPIENT_ADDR relayer=$RELAYER_ADDR"
+```
+
+If either `stellar keys fund` call fails, the account does not exist on the
+ledger. Fund it directly through Friendbot:
+
+```bash
+curl "https://friendbot.stellar.org/?addr=$RECIPIENT_ADDR"
+curl "https://friendbot.stellar.org/?addr=$RELAYER_ADDR"
+```
+
+Confirm both accounts are live before continuing:
+
+```bash
+curl -s "https://horizon-testnet.stellar.org/accounts/$RECIPIENT_ADDR" >/dev/null && echo "recipient funded"
+curl -s "https://horizon-testnet.stellar.org/accounts/$RELAYER_ADDR"   >/dev/null && echo "relayer funded"
+```
+
+### 2. Confirm the deployed controller and its mode
+
+Copy the current `sweepController` ID from `deployments/testnet.json` and verify
+it is live with a read-only call (`can_sweep`) before building anything around
+it. Note whether the controller is in flexible mode (`authorized_destination =
+null`) or locked mode, because that determines which recipient address a claim
+will accept.
+
+```bash
+SWEEP_ID=<SWEEP_CONTROLLER_ID from deployments/testnet.json>
+stellar contract invoke --id "$SWEEP_ID" --network testnet \
+  --source testnet-relayer -- can_sweep --ephemeral_account "$EPHEMERAL_ID"
+```
+
+### 3. Prepare the ephemeral account
+
+Create and initialize an ephemeral account whose `authorized_controller` is the
+deployed `SweepController` contract, then record a payment so the sweep has
+something to transfer. The examples in Test Scenario 1 above show the exact
+invocations.
+
+### 4. Sign the auth entry as the recipient, submit as the relayer
+
+The authorization is a Soroban auth entry for
+`claim(recipient, ephemeral_account)`. It must be signed by the **recipient's**
+key and attached to the transaction that the **relayer** submits. The `--source`
+flag picks the fee payer (relayer) and must not be set to the recipient: doing so
+makes the recipient pay fees and hides the two-party nature of the test.
+
+- With the Rust SDK, build the `claim` invocation and call `submit_as(&relayer)`
+  so the recipient's auth is present but the relayer funds the fees (see the
+  Rust pattern above).
+- With the CLI, make sure the transaction envelope carries the recipient's
+  authorization entry while `--source` remains the relayer. A plain
+  `--source testnet-recipient` invocation is a single-party test, not this flow.
+
+### 5. Verify the result
+
+Check all four signals rather than assuming success from the submit response:
+
+```bash
+# Account status: 2 means Swept
+stellar contract invoke --id "$EPHEMERAL_ID" --network testnet \
+  --source testnet-relayer -- get_status
+
+# Nonce advanced by exactly one
+NONCE_BEFORE=...   # captured immediately before the claim (see nonce-tracking.md)
+NONCE_AFTER=$(stellar contract invoke --id "$SWEEP_ID" --network testnet \
+  --source testnet-relayer -- get_nonce)
+echo "before=$NONCE_BEFORE after=$NONCE_AFTER"   # expect after = before + 1
+
+# SweepCompleted event names the recipient as destination
+stellar events --network testnet \
+  --contract-id "$SWEEP_ID" --start-ledger "$RECENT_LEDGER" \
+  --filter '{"topics": [["sweep"]]}'
+```
+
+Finally, confirm the recipient's token balance actually increased through
+Horizon. A successful contract call and event do not, by themselves, prove the
+custodial payout reached the recipient.
+
+### 6. Confirm destination-locking behaviour
+
+If the controller is locked, repeat the claim with a different recipient and
+expect `UnauthorizedDestination`. If it is flexible, a different recipient
+should be accepted (provided that account's own auth entry is signed). This
+distinguishes a locked-destination rejection from a signature/auth problem.
+
+### 7. Troubleshooting quick reference
+
+| Symptom | What to check |
+|---|---|
+| Auth failure / `require_auth` rejection | Recipient auth entry missing, or signed by the wrong key; verify the transaction carries the recipient's auth and that `--source` is the relayer |
+| `UnauthorizedDestination` | Controller is locked and the recipient does not match `authorized_destination` |
+| `AccountNotReady` | No payment was recorded on the ephemeral account |
+| `AccountExpired` | The account's `expiry_ledger` has passed; use a fresh account |
+| Nonce did not advance | The transaction trapped and rolled back; re-query `get_nonce()` and retry (see `nonce-tracking.md`) |
+| Nothing happens / 404s | The contract ID is stale after a testnet reset; re-check `deployments/testnet.json` and redeploy if needed |
+| Fee paid by the wrong account | `--source` was set to the recipient; the relayer must be the fee payer |
+
+> This flow is testnet-only. Do not reuse testnet recipient or relayer secrets
+> anywhere else, and never place a secret key under `testnet/config/`.
