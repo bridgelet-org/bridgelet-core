@@ -192,7 +192,7 @@ formalises afterwards.
 **Strongly recommended:**
 
 - The arguments you actually passed, redacted to remove credentials — see
-  [the rule below](#what-must-never-be-posted).
+  [the rule below](#what-must-never-be-posted-publicly).
 - The result of the read-only probes the relevant runbook asks for:
   `get_status`, `get_info`, `get_nonce`, `can_sweep`.
 - Whether anyone else touched the same account or controller, if you know.
@@ -269,7 +269,7 @@ Stated plainly, because a vague promise is worse than a small one:
 | First substantive reply | No promise. This is a volunteer project with no paid maintainers, no on-call rotation, and no `CONTRIBUTING.md` that promises anything. |
 | Triage into a code fix | No promise. A finding may be documented and never fixed; that is a legitimate outcome and not a judgement on the reporter. |
 | Credit | Not offered. Do not file expecting attribution, a CVE, or a bounty. |
-| Confidentiality after a private report | **Not promised.** There is no embargo process to honour one. If that matters to you, that is a legitimate reason to not send a full write-up — see [what would make this heavier](#what-would-count-as-making-this-heavier). |
+| Confidentiality after a private report | **Not promised.** There is no embargo process to honour one. If that matters to you, that is a legitimate reason to not send a full write-up — see [what would make this heavier](#this-is-not-a-mainnet-disclosure-policy). |
 
 The last row is the honest cost of a lightweight process, and it is the main
 thing a heavier policy would have to buy.
