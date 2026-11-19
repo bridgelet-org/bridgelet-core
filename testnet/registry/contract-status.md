@@ -118,3 +118,27 @@ When deploying contracts to testnet, update this table and the corresponding sta
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-09-24 | Initial testnet contract status registry |
+
+---
+
+## Quick reference (one-line status)
+
+This is the compact, copy-pasteable status card for integrators. It reflects the IDs recorded in `deployments/testnet.json` (committed `deployedAt`: `2026-10-10T04:38:14Z`) and the timestamps in `last-verified.json`. Keep it in sync with the detailed sections above.
+
+| Contract | Deployed (Y/N) | Contract ID | Last verified live | One-line caveat |
+|---|---|---|---|---|
+| ephemeral_account | Y - supported deployment | `CB7Z22TXR6ZKG7MDXIGJL6QVQQ3L3DQOFR6JV325NZK4CTYWFPVZBBP3` | 2026-09-24 (stale - predates deployment record; re-verify) | Deployed and initialized per account; route sweeps through `sweep_controller`, never call `sweep()` directly. |
+| sweep_controller | Y - supported deployment | `CAJB4RRM5JRPXLITC5JUA7Q3LU2WQJDRPXVKMORXWHJJBPZRYWDJ5V4S` | 2026-09-24 (stale - predates deployment record; re-verify) | Recommended entry point; real Ed25519 verification with nonce replay protection; initialized unlocked (`authorized_destination = null`). |
+| reserve_contract | N - ID listed, not part of supported deployment | `CBG3Y4GWFTL4D37JGV2XWAWC7EUQ7XGH4XM3SFLQYYSKPB2IYMAS54HY` | 2026-09-24 (do not treat as live) | ID appears in `deployments/testnet.json`, but the deploy script never deploys it and it is not wired into `ephemeral_account` (which uses its own hardcoded `BASE_RESERVE_STROOPS`). |
+| account_factory | N - ID listed, not part of supported deployment | `CDBY4L3NTLW4OBZZTY73VL3NNWO2AGFFGBRJVDL3IMKDDLFF2W57WK6H` | 2026-09-24 (do not treat as live) | ID appears in `deployments/testnet.json`, but it is not built by `scripts/build.sh`, not in CI, and not deployed by the tooling; `batch_initialize` drops per-account error detail. |
+
+**Reconciling the source-of-truth discrepancy (read this before relying on any row).** The committed `deployments/testnet.json` lists IDs for **all four** contracts, while the main README and `testnet/docs/overview.md` state that **only `ephemeral_account` and `sweep_controller`** are part of the supported testnet deployment (the deploy script never deploys `reserve_contract` or `account_factory`, and references an unassigned `RESERVE_CONTRACT_ID`). These statements are not proof that four contracts are live. The two "Y" rows are the supported integration targets; the two "N" rows carry IDs that may be stale, hand-entered, or unusable. Additionally, the `2026-09-24` timestamps in `last-verified.json` predate the `2026-10-10` `deployedAt` of the current deployment record, so they cannot be a live confirmation of these specific IDs - treat every row as needing re-verification via `verify-contract-live.md` before you depend on it.
+
+### How to update this table
+
+1. Run the manual health check in `testnet/registry/verify-contract-live.md` (the "Copy-paste health-check script" section) using the IDs read from `deployments/testnet.json`. Do not edit that file as part of this step.
+2. For each contract whose read-only call (`is_expired`, `can_sweep`, `has_base_reserve`) returns a sane value, set **Deployed (Y/N)** to `Y`, copy the full ID from `deployments/testnet.json` verbatim, set **Last verified live** to today's UTC date (`YYYY-MM-DD`), and refine the caveat.
+3. For each contract that is "not found" or that is outside the supported deployment (`reserve_contract`, `account_factory`), set **Deployed (Y/N)** to `N` and keep a caveat explaining why. An ID being present in `deployments/testnet.json` is not, by itself, evidence of a live contract.
+4. Write the same UTC timestamp into `testnet/registry/last-verified.json` for every contract you actually verified, using the existing keys (`ephemeral_account`, `sweep_controller`, `reserve_contract`, `account_factory`). Add a new key only if a new contract is introduced; never remove existing keys, so the JSON stays valid for staleness checks.
+5. If an upgrade changed behavior, also update `wasm-hash-reference.md` and `upgrade-history.md` (see the "Update Process" above).
+6. Commit only the registry/config documentation files. `deployments/testnet.json` is owned by `scripts/deploy-testnet.sh` and is out of scope for a registry verification batch.

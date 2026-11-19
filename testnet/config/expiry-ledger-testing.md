@@ -295,3 +295,34 @@ soroban sandbox start
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-09-24 | Initial expiry ledger computation guide |
+
+---
+
+## Quick reference: ledger counts for common test windows
+
+`expiry_ledger` is a **ledger sequence**, not a wall-clock timestamp. With the testnet's ~5-second average close time, a ledger budget of `N` corresponds to roughly `N / 12` minutes (12 ledgers/minute, ~17,280 ledgers/day). Use this table to pick `N` for fast iteration.
+
+| Test window | Ledgers to add (`N`) | Derivation |
+|---|---|---|
+| 1 minute | 12 | 60 s / 5 s |
+| 5 minutes | 60 | 300 s / 5 s |
+| 10 minutes | 120 | 600 s / 5 s |
+| 1 hour | 720 | 3,600 s / 5 s |
+| 1 day | 17,280 | 86,400 s / 5 s |
+
+Copy-paste helper - computes `EXPIRY = current + N` from a duration in minutes (this is a compact variant of `compute-expiry.sh` above, not a replacement for the worked example):
+
+```bash
+#!/bin/bash
+MINUTES="${1:-10}"
+N=$(( MINUTES * 60 / 5 ))   # 12 ledgers per minute at ~5 s close
+RPC_URL="${RPC_URL:-https://soroban-testnet.stellar.org}"
+CURRENT_LEDGER=$(stellar network current-ledger --rpc-url "$RPC_URL") \
+  || { echo "ERROR: could not fetch current ledger"; exit 1; }
+EXPIRY=$(( CURRENT_LEDGER + N ))
+printf 'current=%s  +%s ledgers (~%s min)  EXPIRY=%s\n' \
+  "$CURRENT_LEDGER" "$N" "$MINUTES" "$EXPIRY"
+# Pass EXPIRY as --expiry_ledger <EXPIRY> to `initialize`.
+```
+
+**Warning - testnet reset and ledger-rate variance.** Stellar testnet is periodically reset, which wipes deployed contracts and restarts the ledger sequence; any hard-coded ledger number (including the worked example above) will go stale after a reset. The ~5-second close time is an *average*: actual ledger rate varies with network load and protocol settings, so `current + N` is an approximation, not a deadline. The longer the window (hours or a day), the more margin you should add, and always re-read the current ledger immediately before `initialize` rather than reusing a cached value. For deterministic ledger advancement, use a local sandbox where you can control the sequence directly.
