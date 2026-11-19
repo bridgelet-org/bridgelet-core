@@ -1,0 +1,42 @@
+# Bridgelet: Stellar Testnet network config (machine-readable)
+#
+# Load this file from SDK code, integration tests, or tooling instead of
+# copying endpoint URLs and the passphrase out of prose docs.
+#
+# Scope: public, non-secret NETWORK values only.
+#   - No secret keys, seed phrases, or signing material belong here. Ever.
+#   - Contract IDs are NOT duplicated here. They change on every redeploy and
+#     testnet reset; read them from the deploy outputs listed in
+#     [sources].contract_ids below.
+#
+# Must stay in sync with:
+#   - .env.example                     (STELLAR_* network block)
+#   - scripts/deploy-testnet.sh        (NETWORK / *_URL / NETWORK_PASSPHRASE)
+#   - testnet/docs/network-config.md   (prose version of these values)
+#
+# Bump schema_version only for breaking changes to key names or structure.
+
+schema_version = 1
+
+[network]
+# Name of the network as stellar-cli knows it (built in to stellar-cli).
+name = "testnet"
+# Must match exactly, including the spaces around ';'.
+passphrase = "Test SDF Network ; September 2015"
+horizon_url = "https://horizon-testnet.stellar.org"
+soroban_rpc_url = "https://soroban-testnet.stellar.org"
+friendbot_url = "https://friendbot.stellar.org"
+
+# Conventional environment-variable names for each [network] key, matching
+# .env.example. A loader can use this map to export the values above without
+# hard-coding the variable names itself.
+[env_var_names]
+name = "STELLAR_NETWORK"
+passphrase = "STELLAR_NETWORK_PASSPHRASE"
+horizon_url = "STELLAR_HORIZON_URL"
+soroban_rpc_url = "STELLAR_SOROBAN_RPC_URL"
+
+[sources]
+# Repo-relative paths to the deploy outputs that hold current contract IDs.
+contract_ids = "deployment-artifacts/contract-ids.txt"
+deployment_record = "deployments/testnet.json"
