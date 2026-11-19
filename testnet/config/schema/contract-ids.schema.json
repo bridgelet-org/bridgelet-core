@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bridgelet-org/bridgelet-core/blob/main/testnet/config/schema/contract-ids.schema.json",
+  "title": "Bridgelet Core testnet contract-ID configuration",
+  "description": "Schema for a filled-in Bridgelet Core testnet deployment record. Validate your own deployments/testnet.json (or a copy you maintain for integrators) against this schema to catch typos in contract IDs, keys and hashes before a test run fails deep inside an SDK call. A contract ID is a Stellar strkey: the letter C (contract) or G (public key) followed by 55 base32 characters (A-Z, 2-7), 56 characters total. Hex fields are lowercase/uppercase-safe 32-byte values (64 hex digits).",
+  "type": "object",
+  "properties": {
+    "network": {
+      "type": "string",
+      "const": "testnet",
+      "description": "Network name. Must be the Stellar public testnet, whose passphrase is 'Test SDF Network ; September 2015'."
+    },
+    "deployedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Optional RFC 3339 timestamp of the deployment (for example, 2026-10-10T04:38:14Z)."
+    },
+    "contracts": {
+      "type": "object",
+      "description": "Deployed contract addresses. Only ephemeralAccount and sweepController are part of the supported testnet deployment; reserveContract and accountFactory entries are not deployed or wired by scripts/deploy-testnet.sh. Keep them here for shape compatibility, but verify any value on-chain before relying on it.",
+      "properties": {
+        "ephemeralAccount": {
+          "type": "string",
+          "pattern": "^C[A-Z2-7]{55}$",
+          "description": "Address of the deployed ephemeral_account contract (a C... strkey, 56 characters).",
+          "examples": [
+            "CB7Z22TXR6ZKG7MDXIGJL6QVQQ3L3DQOFR6JV325NZK4CTYWFPVZBBP3"
+          ]
+        },
+        "sweepController": {
+          "type": "string",
+          "pattern": "^C[A-Z2-7]{55}$",
+          "description": "Address of the deployed sweep_controller contract (a C... strkey, 56 characters). This is the recommended entry point for sweeps.",
+          "examples": [
+            "CAJB4RRM5JRPXLITC5JUA7Q3LU2WQJDRPXVKMORXWHJJBPZRYWDJ5V4S"
+          ]
+        },
+        "reserveContract": {
+          "type": "string",
+          "pattern": "^C[A-Z2-7]{55}$",
+          "description": "Address of the reserve_contract, if one was deployed manually. Not part of the supported tooling; verify on-chain.",
+          "examples": [
+            "CBG3Y4GWFTL4D37JGV2XWAWC7EUQ7XGH4XM3SFLQYYSKPB2IYMAS54HY"
+          ]
+        },
+        "accountFactory": {
+          "type": "string",
+          "pattern": "^C[A-Z2-7]{55}$",
+          "description": "Address of the account_factory, if one was deployed manually. Not part of the supported tooling; verify on-chain.",
+          "examples": [
+            "CDBY4L3NTLW4OBZZTY73VL3NNWO2AGFFGBRJVDL3IMKDDLFF2W57WK6H"
+          ]
+        }
+      },
+      "required": [
+        "ephemeralAccount",
+        "sweepController",
+        "reserveContract",
+        "accountFactory"
+      ],
+      "additionalProperties": false
+    },
+    "config": {
+      "type": "object",
+      "description": "Deployment-time configuration values written alongside the contract IDs. Keys and hashes must be exact-length hex; strkeys must be 56-character base32 values.",
+      "properties": {
+        "authorizedSigner": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$",
+          "description": "Raw 32-byte Ed25519 public key (64 hex digits) that sweep_controller verifies sweep signatures against.",
+          "examples": [
+            "16ac79d642e33ac696e822cc7175ad7ddd5587a9dd8b6942640cbb832a1ab4bf"
+          ]
+        },
+        "creatorAddress": {
+          "type": "string",
+          "pattern": "^G[A-Z2-7]{55}$",
+          "description": "Stellar public key (G... strkey, 56 characters) that initialized sweep_controller.",
+          "examples": [
+            "GCKGORHRRXLVWDVPR565V6JTMYP43TGH4KH5X7REVW7AL4LMZZLF4PAA"
+          ]
+        },
+        "reserveAdminAddress": {
+          "type": "string",
+          "pattern": "^G[A-Z2-7]{55}$",
+          "description": "Stellar public key (G... strkey, 56 characters) with admin rights over reserve_contract.",
+          "examples": [
+            "GCKGORHRRXLVWDVPR565V6JTMYP43TGH4KH5X7REVW7AL4LMZZLF4PAA"
+          ]
+        },
+        "recoveryAddress": {
+          "type": "string",
+          "pattern": "^G[A-Z2-7]{55}$",
+          "description": "Stellar public key (G... strkey, 56 characters) used as the per-account recovery fallback at initialize().",
+          "examples": [
+            "GAEG3HJONLNMHB6L37YX5QHHBYWAKDQZ4GV7UPOWUPI6TOKICHG2PRE6"
+          ]
+        },
+        "ephemeralAccountWasmHash": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$",
+          "description": "32-byte SHA-256 WASM hash (64 hex digits) of the deployed ephemeral_account binary. Compare with the on-chain code hash to confirm which source version is live.",
+          "examples": [
+            "5e667ea0687341bdccc81538492143b573777dd04b2450cdeb89b02cee62c58e"
+          ]
+        }
+      },
+      "required": [
+        "authorizedSigner",
+        "creatorAddress",
+        "reserveAdminAddress",
+        "recoveryAddress",
+        "ephemeralAccountWasmHash"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "network",
+    "contracts",
+    "config"
+  ],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "network": "testnet",
+      "deployedAt": "2026-10-10T04:38:14Z",
+      "contracts": {
+        "ephemeralAccount": "CB7Z22TXR6ZKG7MDXIGJL6QVQQ3L3DQOFR6JV325NZK4CTYWFPVZBBP3",
+        "sweepController": "CAJB4RRM5JRPXLITC5JUA7Q3LU2WQJDRPXVKMORXWHJJBPZRYWDJ5V4S",
+        "reserveContract": "CBG3Y4GWFTL4D37JGV2XWAWC7EUQ7XGH4XM3SFLQYYSKPB2IYMAS54HY",
+        "accountFactory": "CDBY4L3NTLW4OBZZTY73VL3NNWO2AGFFGBRJVDL3IMKDDLFF2W57WK6H"
+      },
+      "config": {
+        "authorizedSigner": "16ac79d642e33ac696e822cc7175ad7ddd5587a9dd8b6942640cbb832a1ab4bf",
+        "creatorAddress": "GCKGORHRRXLVWDVPR565V6JTMYP43TGH4KH5X7REVW7AL4LMZZLF4PAA",
+        "reserveAdminAddress": "GCKGORHRRXLVWDVPR565V6JTMYP43TGH4KH5X7REVW7AL4LMZZLF4PAA",
+        "recoveryAddress": "GAEG3HJONLNMHB6L37YX5QHHBYWAKDQZ4GV7UPOWUPI6TOKICHG2PRE6",
+        "ephemeralAccountWasmHash": "5e667ea0687341bdccc81538492143b573777dd04b2450cdeb89b02cee62c58e"
+      }
+    }
+  ]
+}
