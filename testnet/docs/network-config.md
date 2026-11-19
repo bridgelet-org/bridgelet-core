@@ -35,7 +35,7 @@ STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
 STELLAR_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
 
 STELLAR_CONTRACT_EPHEMERAL_ACCOUNT=CB7Z22TXR6ZKG7MDXIGJL6QVQQ3L3DQOFR6JV325NZK4CTYWFPVZBBP3
-STELLAR_CONTRACT_SWEEP_CONTROLLER=CBEU4X5MNGOECBSTNEUFMBALH2YI5YV4UIH7YXRNOLR2DNLZQD4Z5KWE
+STELLAR_CONTRACT_SWEEP_CONTROLLER=CAJB4RRM5JRPXLITC5JUA7Q3LU2WQJDRPXVKMORXWHJJBPZRYWDJ5V4S
 ```
 
 ## Deployed contract IDs
@@ -45,9 +45,9 @@ Source of truth: [`deployment-artifacts/contract-ids.txt`](../../deployment-arti
 | Contract | Contract ID |
 |---|---|
 | EphemeralAccount | `CB7Z22TXR6ZKG7MDXIGJL6QVQQ3L3DQOFR6JV325NZK4CTYWFPVZBBP3` |
-| SweepController | `CBEU4X5MNGOECBSTNEUFMBALH2YI5YV4UIH7YXRNOLR2DNLZQD4Z5KWE` |
-| ReserveContract | `CACYMICFLHSPKVMCK336IEGCWAQB4XBC7P7HTJSQY3R7Y2YASE4AX3MS` |
-| AccountFactory | `CARBMZY4466SWP3RTN3DR2F4JYNR5UCXD2ICFISV2YI4TS3AAZV2TQ24` |
+| SweepController | `CAJB4RRM5JRPXLITC5JUA7Q3LU2WQJDRPXVKMORXWHJJBPZRYWDJ5V4S` |
+| ReserveContract | `CBG3Y4GWFTL4D37JGV2XWAWC7EUQ7XGH4XM3SFLQYYSKPB2IYMAS54HY` |
+| AccountFactory | `CDBY4L3NTLW4OBZZTY73VL3NNWO2AGFFGBRJVDL3IMKDDLFF2W57WK6H` |
 
 Other useful testnet values:
 
@@ -60,8 +60,9 @@ The native XLM contract ID is derived from the passphrase. You can regenerate
 it with `stellar contract id asset --asset native --network testnet`, or with
 `Asset.native().contractId(Networks.TESTNET)` in the JS SDK.
 
-> **Note:** `deployments/testnet.json` still contains `null` placeholders.
-> Use `deployment-artifacts/contract-ids.txt` until that file is repopulated.
+> **Note:** `deployments/testnet.json` holds the same IDs plus deployment
+> config. SweepController, ReserveContract and AccountFactory were redeployed
+> on 2026-10-10; see [changelog.md](changelog.md) for the old IDs.
 
 ## Configuring clients
 
