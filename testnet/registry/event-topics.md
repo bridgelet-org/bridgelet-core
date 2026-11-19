@@ -259,3 +259,50 @@ Check `testnet/registry/contract-status.md` for current deployment status and co
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-09-24 | Initial event topic documentation for testnet |
+
+---
+
+## Topic/type quick table for indexers
+
+This is a consolidated, copy-paste reference for the exact topic symbol emitted for each event struct. Each event is published with a single-topic tuple built with `symbol_short!(...)`, so `topic[0]` is that exact symbol as a Soroban `ScVal::Symbol`. All nine symbols are 9 characters or fewer (the `symbol_short!` limit). In a `getEvents` topic filter the symbol is written as a plain string (e.g. `["created"]`), not as the raw XDR bytes described earlier in this document.
+
+| Event struct (full type name) | Topic symbol (`topic[0]`) | Emitting contract | Source file |
+|---|---|---|---|
+| `ephemeral_account::events::AccountCreated` | `created` | EphemeralAccount | `contracts/ephemeral_account/src/events.rs` |
+| `ephemeral_account::events::PaymentReceived` | `payment` | EphemeralAccount | `contracts/ephemeral_account/src/events.rs` |
+| `ephemeral_account::events::MultiPaymentReceived` | `multi_pay` | EphemeralAccount | `contracts/ephemeral_account/src/events.rs` |
+| `ephemeral_account::events::SweepExecutedMulti` | `swept_mul` | EphemeralAccount | `contracts/ephemeral_account/src/events.rs` |
+| `ephemeral_account::events::AccountExpired` | `expired` | EphemeralAccount | `contracts/ephemeral_account/src/events.rs` |
+| `ephemeral_account::events::ReserveReclaimed` | `reserve` | EphemeralAccount | `contracts/ephemeral_account/src/events.rs` |
+| `sweep_controller::SweepCompleted` | `sweep` | SweepController | `contracts/sweep_controller/src/lib.rs` |
+| `sweep_controller::DestinationAuthorized` | `dest_auth` | SweepController | `contracts/sweep_controller/src/lib.rs` |
+| `sweep_controller::DestinationUpdated` | `dest_upd` | SweepController | `contracts/sweep_controller/src/lib.rs` |
+
+Copy-paste `getEvents` filter covering all nine topics, using the IDs from `deployments/testnet.json` (IDs can change on redeploy — re-check the record before relying on them, and set `startLedger` to a current ledger):
+
+```bash
+curl -sS https://soroban-testnet.stellar.org \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getEvents",
+    "params": {
+      "startLedger": 1000000,
+      "filters": [
+        {
+          "type": "contract",
+          "contractIds": ["CB7Z22TXR6ZKG7MDXIGJL6QVQQ3L3DQOFR6JV325NZK4CTYWFPVZBBP3"],
+          "topics": [["created"], ["payment"], ["multi_pay"], ["swept_mul"], ["expired"], ["reserve"]]
+        },
+        {
+          "type": "contract",
+          "contractIds": ["CAJB4RRM5JRPXLITC5JUA7Q3LU2WQJDRPXVKMORXWHJJBPZRYWDJ5V4S"],
+          "topics": [["sweep"], ["dest_auth"], ["dest_upd"]]
+        }
+      ]
+    }
+  }'
+```
+
+Note: `ReserveContract` and `AccountFactory` emit none of these nine topics — neither is part of the supported testnet deployment.
