@@ -218,3 +218,29 @@ For SDK/relayer implementers:
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-09-24 | Initial failed sweep signature runbook |
+
+---
+
+## Fast triage: three-question decision tree
+
+When `execute_sweep` fails with `SignatureVerificationFailed`, the signature is checked against exactly one message: `SHA256(destination_xdr || nonce_be_u64 || contract_id_xdr)`. A byte-level mismatch in any of the three components produces the same generic failure, so answer these three questions in order. Every command below is read-only and uses the testnet investigator identity; no secret keys are needed or should be logged.
+
+| # | Question | Symptom that points here | Most likely cause | Exact command to check | Fix |
+|---|---|---|---|---|---|
+| 1 | Is the nonce current? | Signature worked before, or a sweep happened just prior; failure is intermittent | Stale nonce — signature was built against an older on-chain nonce | `stellar contract invoke --id <SWEEP_CONTROLLER_ID> --network testnet --source testnet-investigator -- get_nonce` (compare result with the nonce logged by the signer; signature nonce < on-chain nonce means stale) | Fetch a fresh nonce with `get_nonce()`, re-sign, and submit immediately. Serialize concurrent sweeps per controller. |
+| 2 | Is the contract ID correct? | Signature rejects on testnet but verifies locally; multiple deployments/configs exist | Wrong contract ID in the hashed message (mainnet/localnet ID, or an older testnet deployment) | `python -c "import json; print(json.load(open('deployments/testnet.json'))['contracts']['sweepController'])"` and compare with the ID in `tools/sweep-signer/config.toml` or signer logs | Point the signer at the testnet `sweepController` ID from `deployments/testnet.json` and re-sign. The signature is bound to one deployment by `contract_id_xdr`. |
+| 3 | Is the destination identical? | Failure appears only for one payout; the destination in the request/events differs from the signed one | Destination address mismatch — signed destination XDR does not byte-match the address passed to `execute_sweep` | `stellar contract events --contract-id <SWEEP_CONTROLLER_ID> --start-ledger <RECENT> --filter '{"topics": [["sweep"]]}' --network testnet` and compare the `destination` in recent events with the signed destination; regenerate with `tools/sweep-signer` to confirm | Use the exact same destination (same strkey, same XDR bytes) in both the signature and the `execute_sweep` call. |
+
+If all three match and the failure persists, fall through to Causes 4-6 above (wrong authorized signer key, locked-destination mode, or a nonce increment race). A locked-mode violation returns `UnauthorizedDestination`, not `SignatureVerificationFailed`, so it is not a cause of this specific error.
+
+### What to capture in an incident report
+
+- [ ] Error observed (`SignatureVerificationFailed` vs. host-function trap) and the full transaction hash
+- [ ] SweepController contract ID used on-chain and the ID the signer actually hashed
+- [ ] On-chain `get_nonce()` output at the time of the failed submission
+- [ ] Nonce used to build the signature (from signer logs; never the private key)
+- [ ] Destination address used in the signature and the destination passed to `execute_sweep`
+- [ ] Signer tool/config version and which deployment config was active (testnet vs. other)
+- [ ] Whether other sweeps were submitted for the same controller around the same time
+- [ ] Relevant `SweepCompleted` events (or their absence) from the controller
+- [ ] Whether regenerating a signature with `tools/sweep-signer` and a fresh nonce succeeds
