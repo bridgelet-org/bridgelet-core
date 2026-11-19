@@ -52,6 +52,30 @@ export XLM_SAC="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 | [Pre-flight account status checks](checking-account-status.md) | Gate a state-changing call on `is_expired`, `get_info` and `can_sweep` | Read-only |
 | [Error handling](error-handling.md) | Map each contract error discriminant to handling code | Read-only |
 | [Idempotency considerations](idempotency-considerations.md) | Reason about a duplicate sweep and the one safe retry | Read-only |
+| [Signed sweep walkthrough](signed-sweep-walkthrough.md) | Primary path: Ed25519-signed `execute_sweep` | State-changing |
+| [Gas-free claim walkthrough](gas-free-claim-walkthrough.md) | Recipient-signed, relayer-submitted `claim()` | State-changing |
+| [Multi-asset sweep](multi-asset-sweep.md) | Sweep several recorded assets and read `SweepExecutedMulti` | State-changing |
+| [Expiry and recovery](expiry-and-recovery.md) | Let an account expire and verify the recovery path | State-changing |
+| [Reading contract storage](reading-contract-storage.md) | Inspect persistent storage through RPC | Read-only |
+| [Integration test harness notes](integration-test-harness-notes.md) | Test against live testnet versus the in-process test environment | Read-only |
+| [Simulating batch account creation](batch-account-creation-mock.md) | Loop individual deployments while `account_factory` is unavailable | State-changing |
+| [Monitoring a single account's lifecycle](monitoring-a-single-account-lifecycle.md) | Order the event sequence from creation to sweep or expiry | Read-only |
+| [Testing locked mode](testing-locked-mode.md) | Initialize a locked controller and confirm other destinations are rejected | State-changing |
+| [Update authorized destination](update-authorized-destination-flow.md) | `update_authorized_destination` and its `dest_upd` event | State-changing |
+
+## Keeping this index current
+
+Whenever a file is added to or removed from `testnet/examples/`, update the
+table above in the same pull request. Check for drift with:
+
+```bash
+for f in testnet/examples/*.md; do
+  b=$(basename "$f"); [ "$b" = README.md ] && continue
+  grep -q "($b)" testnet/examples/README.md || echo "not indexed: $b"
+done
+```
+
+`postman-collection.json` is listed above and is the only non-Markdown entry.
 | [Postman RPC collection](postman-collection.json) | Raw `simulateTransaction` probes for Postman/HTTP | Read-only |
 
 ## Read account state
