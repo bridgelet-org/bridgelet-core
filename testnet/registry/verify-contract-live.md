@@ -322,3 +322,111 @@ EPHEMERAL_ID=<ID> SWEEP_ID=<ID> ./healthcheck.sh
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-09-24 | Initial health check procedure for testnet contracts |
+
+---
+
+## Copy-paste health-check script
+
+The `healthcheck.sh` above targets two hard-coded IDs. The script below is the manual, read-only smoke check for *every* ID recorded in `deployments/testnet.json`. It is meant to be run by a human to answer "is what the registry claims actually live right now?" - it is **not** automated monitoring, and it never signs or sends a state-changing transaction. It requires `jq` and a configured `testnet` stellar-cli identity.
+
+```bash
+#!/bin/bash
+# bridgelet-testnet-healthcheck.sh - manual read-only check of the IDs in deployments/testnet.json
+set -uo pipefail
+
+RPC_URL="${RPC_URL:-https://soroban-testnet.stellar.org}"
+NETWORK="testnet"
+IDENTITY="${IDENTITY:-testnet-healthcheck}"
+DEPLOY_FILE="${DEPLOY_FILE:-deployments/testnet.json}"
+# A known initialized ephemeral account, needed as the argument to can_sweep.
+PROBE_ACCOUNT="${PROBE_ACCOUNT:-<KNOWN_EPHEMERAL_ID>}"
+
+command -v jq >/dev/null 2>&1 || { echo "ERROR: jq is required"; exit 1; }
+[ -f "$DEPLOY_FILE" ] || { echo "ERROR: missing $DEPLOY_FILE"; exit 1; }
+
+# Map each key in deployments/testnet.json to a no-argument read-only method.
+read_only_args() {
+  case "$1" in
+    ephemeralAccount) printf '%s' "is_expired" ;;
+    sweepController)  printf 'can_sweep --ephemeral_account %s' "$PROBE_ACCOUNT" ;;
+    reserveContract)  printf '%s' "has_base_reserve" ;;
+    accountFactory)   printf '%s' "" ;; # no known arg-free read method; probe via RPC fallback
+  esac
+}
+
+echo "=== Bridgelet testnet manual health check ($(date -u +%FT%TZ)) ==="
+echo "RPC: $RPC_URL   identity: $IDENTITY   source: $DEPLOY_FILE"
+
+for key in $(jq -r '.contracts | keys[]' "$DEPLOY_FILE"); do
+  ID="$(jq -r --arg k "$key" '.contracts[$k]' "$DEPLOY_FILE")"
+  ARGS="$(read_only_args "$key")"
+  printf '\n[%s] %s\n' "$key" "$ID"
+
+  if [ -z "$ID" ] || [ "$ID" = "null" ]; then
+    echo "  RESULT: NO ID RECORDED -> not deployed / not verifiable"
+    continue
+  fi
+  if [ -z "$ARGS" ]; then
+    echo "  NOTE: no arg-free read method; confirm existence via the RPC fallback below"
+    continue
+  fi
+
+  OUT="$(stellar contract invoke --id "$ID" --network "$NETWORK" --source "$IDENTITY" -- $ARGS 2>&1)"
+  RC=$?
+  if [ "$RC" -ne 0 ]; then
+    echo "  RESULT: INVOKE FAILED (rc=$RC): $OUT"
+    case "$OUT" in
+      *"not found"*|*"does not exist"*|*"Contract not found"*)
+        echo "  INTERPRET: NOT FOUND - no ledger entry for this ID (never deployed, or wiped by a testnet reset)." ;;
+      *)
+        echo "  INTERPRET: UNAVAILABLE - instance likely exists but the call failed panicked, the interface changed after an upgrade, or the RPC is overloaded. Retry, then check upgrade-history.md and the WASM hash." ;;
+    esac
+    continue
+  fi
+
+  case "$OUT" in
+    true|false) echo "  RESULT: LIVE + RESPONDING ($ARGS -> $OUT)" ;;
+    *)          echo "  RESULT: RESPONDED, unexpected value: $OUT" ;;
+  esac
+done
+```
+
+Note that `reserve_contract` and `account_factory` are documented as **not part of the supported deployment** (README, `testnet/docs/overview.md`), even though this file lists IDs for them. A response of "not found" for those two IDs is therefore expected and is not a regression.
+
+### RPC fallback (`simulateTransaction` / `getLedgerEntries`)
+
+Use these when `stellar-cli` is unavailable or you want a programmatic check. Network values: passphrase `Test SDF Network ; September 2015`, RPC `https://soroban-testnet.stellar.org`.
+
+`simulateTransaction` proves both existence and callability - build an invoke envelope without sending (`--send no`), then simulate it:
+
+```bash
+ID="CB7Z22TXR6ZKG7MDXIGJL6QVQQ3L3DQOFR6JV325NZK4CTYWFPVZBBP3"
+ENVELOPE="$(stellar contract invoke --id "$ID" --network testnet \
+  --source "$IDENTITY" --send no -- is_expired 2>/dev/null)"
+
+curl -s -X POST "$RPC_URL" -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg tx "$ENVELOPE" '{jsonrpc:"2.0",id:1,method:"simulateTransaction",
+        params:{transaction:$tx,resourceConfig:{instructionLeeway:1000000}}}')" \
+  | jq '{results: .result.results, error: .error}'
+# Clean result entry -> contract exists and the read-only method is callable.
+# "Contract not found" / missing ledger entry -> ID does not resolve.
+# HostError / contract error -> instance exists but the call failed (see below).
+```
+
+`getLedgerEntries` answers the narrower question "is there a ledger entry at all?". Pass the base64 XDR of the contract-instance ledger key (a `LedgerKey::ContractData` for the contract address with key `ContractInstance`), which you can produce with `stellar xdr encode` or an SDK helper:
+
+```bash
+curl -s -X POST "$RPC_URL" -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"getLedgerEntries",
+       "params":{"keys":["<BASE64_CONTRACT_INSTANCE_LEDGER_KEY>"]}}' \
+  | jq '.result.entries | length'
+# 0 entries  -> NOT FOUND: no contract instance on the ledger.
+# 1+ entries -> instance exists; use simulateTransaction to tell healthy vs unavailable.
+```
+
+### Distinguishing "not found" from "paused/unavailable"
+
+None of these contracts exposes a `paused` getter, so classify by *where* the check fails rather than by a flag:
+
+- **Not found** - the ID resolves to no ledger entry (`getLedgerEntries` returns 0, or invoke/RPC says "not found"/"does not exist"). Causes: ID never deployed, mistyped/old ID, or a testnet reset wiped it. Action: confirm the ID against `deployments/testnet.json` and `contract-status.md`, then redeploy with `scripts/deploy-testnet.sh` if appropriate. Do **not** report this as "paused".
+- **Paused / unavailable** - the ledger entry exists (or `getLedgerEntries` returns 1+) but the read-only call returns a `HostError`, a contract error, invalid XDR, or times out. Causes: contract panic, an upgrade that changed the interface (check `upgrade-history.md` and the WASM hash), or transient RPC overload. Action: retry once, then investigate the error before recording the contract as unhealthy in `contract-status.md` and `last-verified.json`.
