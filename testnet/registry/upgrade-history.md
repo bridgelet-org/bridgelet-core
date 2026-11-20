@@ -164,3 +164,40 @@ If an upgrade introduces critical bugs:
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-09-24 | Initial upgrade history log template |
+
+---
+
+## Upgrade Event Log Template (Issue #984 Addendum)
+
+Contracts on testnet may be upgraded in place rather than redeployed under a new ID, and `EphemeralAccount` exposes an admin-gated `upgrade(new_wasm_hash)`. Use the table below as the ready-to-use log: append one row for every observed or performed upgrade so integrators can correlate a behavior change to a specific upgrade instead of assuming a regression. The rows marked `EXAMPLE` are illustrative formatting samples only — they are **not real upgrade events** and must not be read as history.
+
+| Date | Contract | Contract ID | Old WASM Hash | New WASM Hash | Reason | Commit | Recorded By |
+|---|---|---|---|---|---|---|---|
+| YYYY-MM-DD | EphemeralAccount | C... | <old 64-hex> | <new 64-hex> | <why the code changed> | <git SHA> | <github login> |
+| EXAMPLE 2026-11-01 (ILLUSTRATIVE, NOT REAL) | EphemeralAccount | CB7Z...EXAMPLE | aaaa... | bbbb... | EXAMPLE: "fix reserve reclaim rounding" | EXAMPLE: deadbeef | ustaxs |
+| EXAMPLE 2026-11-05 (ILLUSTRATIVE, NOT REAL) | EphemeralAccount | CB7Z...EXAMPLE | bbbb... | cccc... | EXAMPLE: "gas optimization in sweep" | EXAMPLE: cafebabe | ustaxs |
+
+Baseline: `deployments/testnet.json` records `config.ephemeralAccountWasmHash = 5e667ea0687341bdccc81538492143b573777dd04b2450cdeb89b02cee62c58e` as the initially deployed `EphemeralAccount` WASM (deployedAt `2026-10-10T04:38:14Z`). Use this as the "old hash" for the first upgrade you record if no earlier log entry exists.
+
+### Steps to verify an upgrade happened
+
+1. Read the contract's current on-chain code hash from its instance entry and compare it to the recorded `New WASM Hash` (and the baseline above). The instance entry's `executable` field carries the active `wasm_hash`:
+
+```bash
+curl -sS https://soroban-testnet.stellar.org \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"getLedgerEntries","params":{"keys":["<BASE64_XDR_OF_CONTRACT_INSTANCE_KEY>"]}}'
+# Decode `executable.wasm_hash` from the returned instance entry and compare it
+# to the Old/New WASM Hash values in the log.
+```
+
+2. Compute/compare the hash of the WASM you believe was deployed; `stellar contract upload` prints the hash of an uploaded WASM:
+
+```bash
+stellar contract upload \
+  --wasm <WASM_PATH> \
+  --network testnet \
+  --source testnet-admin
+```
+
+3. Correlate with transaction history: `upgrade()` is invoked with `--new_wasm_hash`. Note that **no native upgrade event is emitted**, so `getEvents` topic filters will not surface upgrades; you must inspect `getLedgerEntries` / transaction history (and the `upgrade` invocation arguments) rather than events. Record the tx hash and admin address alongside the WASM hashes.

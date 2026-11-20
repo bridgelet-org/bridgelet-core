@@ -198,3 +198,36 @@ stellar contract invoke \
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-09-24 | Initial dependency graph for testnet topology |
+
+---
+
+## Live Call Path Diagram (Issue #986 Addendum)
+
+The diagram below is a compact restatement of the call relationships actually exercised on testnet today: the two entry points on `SweepController` (`execute_sweep()` and `claim()`) calling into `EphemeralAccount` (`sweep()` and `sweep_claim()` respectively). It intentionally leaves `ReserveContract` and `AccountFactory` out of the live path: per the README and `testnet/docs/overview.md` they are not deployed by `scripts/deploy-testnet.sh` and are not wired into `EphemeralAccount`, so they are drawn as dashed nodes with dashed links to mark them as disconnected.
+
+```mermaid
+flowchart TD
+    SC["SweepController (deployed)"]
+    EA["EphemeralAccount (deployed)"]
+    RC["ReserveContract (not deployed)"]:::disconnected
+    AF["AccountFactory (not deployed)"]:::disconnected
+
+    SC -->|"execute_sweep() calls sweep()"| EA
+    SC -->|"claim() calls sweep_claim()"| EA
+    RC -.->|"intended base-reserve read (unwired)"| EA
+    AF -.->|"intended batch_initialize (unwired)"| EA
+
+    classDef disconnected stroke-dasharray: 5 5,stroke:#888888,color:#888888;
+```
+
+ASCII fallback (`[X]` = live/deployed node, `(X)` = dashed/disconnected node, `- - ->` = unwired/intended link):
+
+```
+ [SweepController] -- execute_sweep() -> sweep() --------------> [EphemeralAccount]
+                  \-- claim()         -> sweep_claim() --------> [EphemeralAccount]
+
+ (ReserveContract) - - - intended base-reserve read (unwired) - - -> [EphemeralAccount]
+ (AccountFactory)  - - - intended batch_initialize (unwired)  - - -> [EphemeralAccount]
+```
+
+Legend: solid nodes and solid arrows are live on testnet today and show caller-to-callee direction — `SweepController::execute_sweep` invokes `EphemeralAccount::sweep`, and `SweepController::claim` invokes `EphemeralAccount::sweep_claim`. Dashed nodes and dashed arrows mark `ReserveContract` and `AccountFactory` as disconnected from this graph because they are undeployed/unwired per the README and `testnet/docs/overview.md`; their links describe only intended future integrations, not calls that happen on-chain today.
