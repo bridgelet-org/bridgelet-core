@@ -263,3 +263,117 @@ stellar contract events \
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-09-24 | Initial nonce tracking guide |
+
+---
+
+## Testnet pre-flight checklist for nonce-safe signing
+
+The single most reliable way to avoid a confusing `SignatureVerificationFailed`
+is to treat `get_nonce()` as a value you read at signing time, never as a value
+you remember. This section is an additive pre-flight checklist for testnet
+signing with `tools/sweep-signer` (the canonical signer) or any equivalent
+off-chain signer.
+
+### Why a stale nonce looks like a signature bug
+
+The signed message is `SHA256(destination_xdr || nonce_be_u64 ||
+contract_id_xdr)`. The nonce is one input to the hash, so signing with a nonce
+that differs from the contract's current one produces a completely different
+digest. The contract reports only a signature-verification failure; there is no
+error that says "wrong nonce". If a signature fails to verify, a stale nonce is
+one of the first things to rule out, alongside wrong destination XDR, wrong
+contract ID and the wrong signing key.
+
+### Checklist
+
+- [ ] Query `get_nonce()` on the **deployed testnet** `sweepController` from
+  `deployments/testnet.json` (or `deployment-artifacts/contract-ids.txt`),
+  immediately before signing. Do not use a nonce cached from a previous test run
+  or from another network.
+- [ ] Use the nonce as a big-endian `u64` (8 bytes) and keep it identical in the
+  signer input and in the contract call. The signer tool handles XDR encoding of
+  addresses for you; avoid hand-rolling it.
+- [ ] Confirm the destination address and the contract ID used to build the
+  message are the exact ones passed to `execute_sweep`. A mismatch in either
+  produces the same verification failure.
+- [ ] Serialize concurrent sweeps against the same controller. Two workers that
+  both read nonce N will both sign for N, and only the first submission will
+  succeed; the second must re-read the nonce and retry.
+- [ ] Record the nonce used for each signature in your logs so a failure can be
+  correlated with the on-chain value.
+
+### Race and retry handling
+
+Nonce and signature must be produced from a single fresh read, and a failed
+submission must trigger a fresh read rather than a resend of the same envelope:
+
+1. Call `get_nonce()` to read N.
+2. Build and sign the message for N.
+3. Submit `execute_sweep`.
+4. If submission fails or the invocation does not take effect, go back to step 1
+   and read the nonce again. Do not assume N is still current.
+
+For a `claim()` (gas-free) flow the nonce is checked internally rather than
+supplied by the caller, but it shares the same counter. A claim that advances
+the nonce will invalidate any execute_sweep signature you prepared earlier for
+the old value.
+
+### Can a failed sweep advance the nonce?
+
+Treat this as "query, do not assume":
+
+- If the Soroban transaction **traps/reverts**, all of its state changes are
+  rolled back, so the nonce does **not** advance. A signature prepared for the
+  nonce you read before the failed transaction is still usable.
+- If the `execute_sweep` / `claim` invocation **succeeds on-chain**, the nonce
+  advances by one. This is true even if a later, off-chain step (for example the
+  SDK's custodial payout via Horizon) has a problem. A sweep that "looked
+  failed" from the application side may therefore still have consumed its nonce.
+- Because a testnet reset wipes contract state and a redeploy creates a new
+  controller, the current nonce can also change out from under you entirely;
+  re-check the contract ID and the live nonce after either event.
+
+In all cases the safe rule is the same: call `get_nonce()` again before every
+signature and never reuse a signature across attempts.
+
+### Concrete command sequence
+
+```bash
+SWEEP_ID=<SWEEP_CONTROLLER_ID from deployments/testnet.json>
+DESTINATION=<G..._RECIPIENT_ADDRESS>
+EPHEMERAL_ID=<EPHEMERAL_ACCOUNT_ID>
+
+# 1. Read the nonce immediately before signing
+NONCE=$(stellar contract invoke \
+  --id "$SWEEP_ID" --network testnet \
+  --source testnet-relayer -- get_nonce)
+echo "signing with nonce=$NONCE"
+
+# 2. Build and sign with the canonical signer tool
+#    tools/sweep-signer uses soroban-sdk XDR serialization and an S... secret
+SIG=$(cargo run --quiet --manifest-path tools/sweep-signer/Cargo.toml -- \
+  --contract-id "$SWEEP_ID" \
+  --destination "$DESTINATION" \
+  --nonce "$NONCE")
+# Refer to tools/sweep-signer --help for exact flag names in your checkout.
+
+# 3. Submit using the SAME nonce-derived signature
+stellar contract invoke \
+  --id "$SWEEP_ID" --network testnet \
+  --source testnet-relayer -- \
+  execute_sweep \
+  --ephemeral_account "$EPHEMERAL_ID" \
+  --destination "$DESTINATION" \
+  --auth_signature "$SIG"
+
+# 4. On any failure, return to step 1 and re-read get_nonce()
+NONCE_AFTER=$(stellar contract invoke \
+  --id "$SWEEP_ID" --network testnet \
+  --source testnet-relayer -- get_nonce)
+echo "nonce now=$NONCE_AFTER"
+```
+
+> The `tools/sweep-signer` flags in step 2 are illustrative; check the tool's
+> `--help` in your checkout for the current argument names. The invariant that
+> matters is that the nonce passed to the signer is the one returned by the
+> immediately preceding `get_nonce()` call.
