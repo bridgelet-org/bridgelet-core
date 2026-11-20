@@ -25,8 +25,10 @@ jobs:
     - name: Ensure rustfmt and clippy are installed
       run: rustup component add rustfmt clippy
 
-    - name: Install stellar-cli
-      run: curl -fsSL https://github.com/stellar/stellar-cli/raw/main/install.sh | sh -s -- --install-deps
+    - name: Install stellar-cli build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libdbus-1-dev libudev-dev
 
     - name: Install soroban-cli
       run: cargo install --locked stellar-cli --version 23.4.1
