@@ -7,6 +7,29 @@ deployment files. For contract-by-contract deployment status, see the
 
 ---
 
+## Quick-reference answers
+
+This table is a quick-scan index for the questions testnet users ask most. Each
+answer links to the detailed section below; the table is a summary, not a
+replacement for those explanations.
+
+| Question | Short answer | Details |
+|---|---|---|
+| Why does `sweep()` take a signature it never checks? | The parameter is a stub; authorization comes from `authorized_controller.require_auth()`, not Ed25519 verification. | [Sweeps and signatures](#sweeps-and-signatures) |
+| Is `reserve_contract` live on testnet? | No. Not deployed by the tooling, and not wired into `ephemeral_account`. | [Is `reserve_contract` live?](#is-reserve_contract-live-on-testnet) |
+| Is `account_factory` live on testnet? | No. Same status as `reserve_contract`. | [Is `account_factory` live?](#is-account_factory-live-on-testnet) |
+| How should I sweep funds? | Through `SweepController::execute_sweep` or `claim` - never the raw `sweep()`. | [How to sweep](#so-how-should-i-sweep-funds-on-testnet) |
+| Where do I get contract IDs? | `deployments/testnet.json` after running the script; `contract-ids.txt` only as a hint. | [Finding IDs](#where-do-i-find-the-contract-ids) |
+| Is the controller locked to one destination? | No. Deployed with `authorized_destination = null` (unlocked). | [Locked destination?](#is-the-deployed-sweep_controller-locked-to-a-single-destination) |
+| Why is CI disabled, and does it hurt stability? | Deploy steps are commented out, so no auto-redeploy on merge: IDs are more stable but may lag `main`. | [CI and stability](#ci-and-stability) |
+| Which contracts are supported? | Only `ephemeral_account` and `sweep_controller`. | [Which contracts?](#which-contracts-can-i-actually-call-on-testnet) |
+| What network endpoints do I use? | Passphrase `Test SDF Network ; September 2015`; RPC `https://soroban-testnet.stellar.org`; Horizon `https://horizon-testnet.stellar.org`. | [Network config](./network-config.md) |
+| What versions should I use? | Soroban SDK 22.0.0 and `stellar-cli` 23.4.1. | [Versions](#what-versions-should-i-use) |
+| Does `scripts/test.sh` cover everything? | No. It only runs `ephemeral_account` unit tests. | [Testing](#does-scriptstestsh-test-everything) |
+| Which source version is live right now? | Trace the ID in the deploy record with git and verify the on-chain WASM hash. | [Versioning](./versioning.md) |
+
+---
+
 ## Contracts and deployment
 
 ### Which contracts can I actually call on testnet?
