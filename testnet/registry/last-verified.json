@@ -2,5 +2,12 @@
   "ephemeral_account": "2026-09-24T00:00:00Z",
   "sweep_controller": "2026-09-24T00:00:00Z",
   "reserve_contract": "2026-09-24T00:00:00Z",
-  "account_factory": "2026-09-24T00:00:00Z"
+  "account_factory": "2026-09-24T00:00:00Z",
+  "_meta": {
+    "schema_version": "1.1",
+    "purpose": "Machine-readable companion to testnet/registry/contract-status.md: maps each contract to its last-verified ISO 8601 UTC timestamp so a future CI job or bot can flag when the testnet registry has not been refreshed.",
+    "staleness_threshold_days": 30,
+    "updated_by": "Maintainer after running the testnet/registry/verify-contract-live.md procedure.",
+    "refresh_rule": "Refresh every contract timestamp when verify-contract-live.md is run; do not hand-edit individual values."
+  }
 }
