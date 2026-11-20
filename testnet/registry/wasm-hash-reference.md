@@ -150,3 +150,31 @@ Pair with `testnet/registry/last-verified.json` - if WASM hash in this doc doesn
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-09-24 | Initial WASM hash reference template |
+
+---
+
+## Recorded WASM hashes snapshot
+
+The table below snapshots the WASM hash recorded in the committed `deployments/testnet.json`, alongside the contract ID from the same record. This lets a maintainer confirm that testnet runs the code in this exact commit without access to deploy-pipeline artifacts. A hash is filled in only where the deployment record actually contains one.
+
+| Contract | Contract ID (from `deployments/testnet.json`) | Recorded WASM hash |
+|---|---|---|
+| EphemeralAccount | `CB7Z22TXR6ZKG7MDXIGJL6QVQQ3L3DQOFR6JV325NZK4CTYWFPVZBBP3` | `5e667ea0687341bdccc81538492143b573777dd04b2450cdeb89b02cee62c58e` |
+| SweepController | `CAJB4RRM5JRPXLITC5JUA7Q3LU2WQJDRPXVKMORXWHJJBPZRYWDJ5V4S` | not available in the deployment record |
+| ReserveContract | `CBG3Y4GWFTL4D37JGV2XWAWC7EUQ7XGH4XM3SFLQYYSKPB2IYMAS54HY` | not available in the deployment record |
+| AccountFactory | `CDBY4L3NTLW4OBZZTY73VL3NNWO2AGFFGBRJVDL3IMKDDLFF2W57WK6H` | not available in the deployment record |
+
+> The presence of an ID in `deployments/testnet.json` does not by itself confirm a live deployment. Per the main README, the deploy script deploys only `ephemeral_account` and `sweep_controller`; `reserve_contract` and `account_factory` are not deployed by it. Verify any ID on-chain before relying on it.
+
+To read a contract's current on-chain code hash and compare it with the recorded value:
+
+```bash
+RECORDED_HASH=5e667ea0687341bdccc81538492143b573777dd04b2450cdeb89b02cee62c58e
+ONCHAIN_HASH=$(stellar contract info hash --id CB7Z22TXR6ZKG7MDXIGJL6QVQQ3L3DQOFR6JV325NZK4CTYWFPVZBBP3 --network testnet)
+
+echo "Recorded: $RECORDED_HASH"
+echo "On-chain: $ONCHAIN_HASH"
+[ "$RECORDED_HASH" = "$ONCHAIN_HASH" ] && echo "MATCH" || echo "MISMATCH (deploy drift or upgrade)"
+```
+
+For another contract, replace the `--id` value with that contract's ID and set `RECORDED_HASH` to its recorded value (or note that none is available in the deployment record). To compare against this commit's own binary, compute the local hash with `stellar contract info hash --wasm target/wasm32-unknown-unknown/release/ephemeral_account.wasm` and compare it with `$ONCHAIN_HASH`.

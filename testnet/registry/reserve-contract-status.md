@@ -137,3 +137,17 @@ stellar contract invoke --id $RESERVE_CONTRACT_ID --network testnet --source tes
 | Version | Date | Changes |
 |---|---|---|
 | 1.0 | 2026-09-24 | Initial ReserveContract status tracking |
+
+---
+
+## Two-gap tracker (checklist)
+
+Use this checklist to track the two independent gaps described above. They are tracked as separate items on purpose.
+
+| | Gap A - deployment | Gap B - wiring |
+|---|---|---|
+| **Criteria** | `reserve_contract` is built and deployed by `scripts/deploy-testnet.sh`, initialized, and its ID recorded in `deployments/testnet.json` | `EphemeralAccount` reads the base-reserve value from `reserve_contract` at runtime instead of the hardcoded `BASE_RESERVE_STROOPS` constant |
+| **Owner** | Deployment tooling maintainer (deploy script owner) | `ephemeral_account` contract maintainer |
+| **Done when** | A testnet contract ID for `reserve_contract` is recorded and a read-only invoke (`get_admin` / `get_base_reserve`) succeeds | A sweep/reclaim path demonstrably uses the value returned by `ReserveContract::require_base_reserve()`, covered by a test |
+
+Closing one gap does not close the other: a deployed-but-unwired contract still has no effect on sweep behavior, and wired code still has nothing to read on testnet until Gap A is done.
