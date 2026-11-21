@@ -2,44 +2,46 @@
 
 ## Scope
 
-Use this runbook when either documented endpoint is unavailable, returns
-errors, stops advancing, or behaves inconsistently:
+Use this runbook when public testnet infrastructure is degraded or down:
 
 - Soroban RPC: `https://soroban-testnet.stellar.org`
 - Horizon: `https://horizon-testnet.stellar.org`
 
-Bridgelet testnet support remains best effort. This runbook does not promise
-active on-call coverage, restoration time, or uninterrupted service.
+These services are outside Bridgelet’s control. Support for testnet automation
+is best-effort; this runbook is about **containing impact**, not restoring
+Stellar’s endpoints.
+
+## Immediate actions (checklist)
+
+1. **Check Stellar’s status page** — [https://status.stellar.org/](https://status.stellar.org/)  
+   Note any active incidents for Testnet / Soroban / Horizon.
+2. **Confirm locally** with the read-only probes below (rule out laptop DNS/TLS).
+3. **Switch clients to the fallback RPC** documented in
+   [`testnet/config/rpc-fallback.md`](../config/rpc-fallback.md) when the primary
+   Soroban RPC is the failing dependency.
+4. **Pause automated testnet-dependent CI and integration jobs** that need live
+   RPC/Horizon (keep pure unit/lint/build jobs running).
+5. **Preserve evidence** — do not clear queues, nonces, or pending
+   `record_payment` / sweep intents until outcomes are known.
 
 ## Endpoint impact
 
 | Failure | Affected operations | Safe continuation |
 |---|---|---|
-| Soroban RPC unavailable | contract simulation, submission, polling, state reads, and RPC event queries | Horizon may collect payment evidence into a durable queue, but do not trigger contract writes from stale observations |
-| Horizon unavailable | payment discovery, classic history/balance reads, and workflows depending on them | Soroban read diagnostics may continue; do not infer a new payment from stored metadata |
-| both unavailable | all reads/writes through the documented endpoints | pause dependent testnet mutation |
-| local DNS/TLS/client failure | unknown until independently checked | preserve local evidence before declaring a public outage |
+| Soroban RPC down | simulate, submit, poll, contract state, Soroban events | Horizon may still observe classic payments into a **durable** queue; do **not** submit contract writes from stale state |
+| Horizon down | payment discovery, classic balances/history | Soroban read diagnostics only; do not invent payments from cached metadata |
+| Both down | all documented public endpoints | pause testnet mutation |
+| Local DNS/TLS only | appears down for one operator | fix local network; do not pause org-wide CI |
 
-Soroban RPC and Horizon are not interchangeable. Contract state/events require
-Soroban RPC; classic payment and account observation uses Horizon.
+Soroban RPC and Horizon are **not** interchangeable.
 
 ## 1. Record before acting
 
-Capture:
+Capture UTC time, observer, endpoint, exact error, last good ledger/cursor,
+in-flight tx hashes, pending payment intents, and current sweep nonce if
+relevant. Do not delete evidence while scoping.
 
-- UTC start time and observer;
-- endpoint and exact error;
-- DNS, TLS, timeout, HTTP, JSON-RPC, or ledger-progress symptom;
-- affected workflows;
-- last successful Soroban ledger;
-- last durable Horizon/event cursor;
-- in-flight transaction hashes and pending record-payment intents;
-- current `SweepController::get_nonce`; and
-- whether any signed authorization was submitted elsewhere.
-
-Do not clear queues or delete evidence while determining scope.
-
-## 2. Run read-only checks
+## 2. Read-only health probes
 
 ### Soroban RPC
 
@@ -47,144 +49,85 @@ Do not clear queues or delete evidence while determining scope.
 curl --fail-with-body --silent --show-error \
   -H 'Content-Type: application/json' \
   --data '{"jsonrpc":"2.0","id":1,"method":"getLatestLedger"}' \
-  "$STELLAR_SOROBAN_RPC_URL"
+  "${STELLAR_SOROBAN_RPC_URL:-https://soroban-testnet.stellar.org}"
 ```
-
-Compare the returned sequence with an earlier successful check. A successful
-response does not prove transaction submission or event history is healthy.
 
 ### Horizon
 
 ```bash
 curl --fail-with-body --silent --show-error \
-  "$STELLAR_HORIZON_URL/payments?order=desc&limit=1"
+  "${STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}/payments?order=desc&limit=1"
 ```
 
-Record the HTTP result and paging/ledger information. An empty result set is not
-an outage.
+Empty payment lists are not an outage. Compare ledger progress to a previous
+successful observation.
 
 ### Stellar status
 
-Check the official [Stellar status page](https://status.stellar.org/). Record
-both its advisory state and direct endpoint evidence. A failure from one network
-location is a suspected incident until broader reachability is established.
+Cross-check [status.stellar.org](https://status.stellar.org/). A single-region
+failure is a **suspected** incident until confirmed more broadly.
 
-## 3. Pause dependent automation
+## 3. Fallback RPC
 
-Use a durable pause when available. Preserve read-only logs and cursors.
+Follow [`testnet/config/rpc-fallback.md`](../config/rpc-fallback.md):
 
-### Soroban RPC unavailable
+- Point `STELLAR_SOROBAN_RPC_URL` (and CLI network config) at the documented
+  fallback.
+- Re-run the `getLatestLedger` probe against the fallback before resuming
+  submits.
+- Record which endpoint was used for any transactions submitted during the
+  incident.
 
-Pause:
+If the fallback is also unhealthy, treat as dual-path outage and stay paused.
 
-- `record_payment` submission;
-- `execute_sweep` and `claim` submission;
-- expiry, recovery, and reserve-reclaim submission;
-- relayers/workers that retry or submit stale work; and
-- testnet deployment jobs.
+## 4. Pause dependent automation
 
-A Horizon watcher may continue collecting inbound-payment evidence only if its
-queue is durable and will not release contract writes during the outage.
+### CI / integration tests
 
-### Horizon unavailable
+Pause jobs that:
 
-Pause every workflow that requires current classic payment or balance data,
-including automatic payment recording and balance-dependent sweep/claim work.
-Soroban-only read diagnostics may continue.
+- deploy or invoke contracts on testnet;
+- assert against live RPC/Horizon responses;
+- consume testnet faucets or shared ephemeral accounts.
 
-Do not infer a real inbound transfer from `get_info.payments`; that list is
-recorded metadata.
+Do **not** pause source-only build, unit tests, fmt, or lint. Document skipped
+jobs in the incident note.
 
-### Both unavailable
+### Runtime workers
 
-Pause all dependent testnet contract mutation and deployment activity. Preserve
-the last known state and pending work for reconciliation.
+| Dependency down | Pause |
+|---|---|
+| Soroban RPC | `record_payment`, sweep/claim submitters, expiry/recovery workers, testnet deploys |
+| Horizon | auto payment discovery and balance-dependent sweeps |
+| Both | all testnet contract mutation |
 
-Pause creation of new sweep signatures unless signing is formally separated
-from submission and stale-nonce risk is controlled.
+Horizon watchers may continue **enqueue-only** collection if the queue will not
+auto-submit during the outage.
 
-### CI and integration jobs
+## 5. In-flight transactions
 
-Pause only jobs that access the unavailable testnet endpoint or depend on fresh
-testnet state. Do not disable source-only build, formatting, lint, or local
-contract tests merely because a public endpoint is down. Record which jobs were
-skipped and why.
+A timeout is not a confirmed failure.
 
-## 4. Handle in-flight transactions
+1. Keep the hash and intended operation.  
+2. Do not resubmit until final status is known.  
+3. After recovery, query the original hash first.  
+4. Reconcile state, nonces, events, and balances.  
+5. Only then decide on a new transaction.
 
-A timeout is not proof of failure.
+Never log secret keys or reusable pre-image auth material.
 
-For every in-flight transaction:
+## 6. Resume criteria
 
-1. preserve its hash and intended operation;
-2. do not resubmit until the final on-chain outcome is known;
-3. after recovery, query the original hash first;
-4. reconcile state, nonce, events, and relevant balances; and
-5. decide explicitly whether a new operation is required.
+Resume automated submits only when:
 
-Do not log secret keys or reusable pre-submission authorization material.
+- primary or fallback RPC passes health probes; and
+- status page does not contradict recovery; and
+- one successful dry-run read (and a low-risk test invoke, if policy allows)
+  has been recorded.
 
-## 5. Fallback policy
+## Related documentation
 
-The current main branch does not contain a reviewed fallback-provider policy.
-The separately tracked target `testnet/config/rpc-fallback.md` must not be
-treated as approved merely because its path is referenced.
-
-A Soroban RPC fallback may be used only after a maintainer verifies:
-
-- exact Stellar Testnet passphrase and network identity;
-- required methods for ledger reads, simulation, submission, transaction lookup,
-  and event retrieval;
-- ledger lag, history retention, pagination, and rate limits;
-- stable transaction hashes and contract IDs on the same network; and
-- failover tested before an incident, without automatic transaction replay.
-
-A Horizon fallback must independently verify:
-
-- the same testnet ledger history;
-- account, payment, balance, and pagination operations;
-- cursor/stream ordering and retention; and
-- compatibility with durable watcher state.
-
-A fallback is not a recovery guarantee. If none is approved, pause, preserve
-evidence, wait, and reconcile. Never invent a provider during the incident.
-
-## 6. Detect a testnet reset during recovery
-
-Treat the network as reset if the latest ledger unexpectedly decreases, old
-account/contract IDs disappear, or deployment records no longer resolve.
-
-After a reset:
-
-- do not replay transactions from pre-reset history;
-- do not assume prior contract storage or nonce values exist;
-- reconcile current deployment records and the testnet changelog;
-- treat redeployment as a separate manual operation, not an outage workaround.
-
-## 7. Recovery sequence
-
-1. Confirm the intended endpoint is reachable and the ledger is advancing.
-2. Confirm the exact testnet passphrase.
-3. Verify contract IDs with
-   [`../registry/verify-contract-live.md`](../registry/verify-contract-live.md).
-4. Reconcile every in-flight transaction by hash.
-5. Resume Horizon from the last durable cursor, if Horizon recovered.
-6. Release queued `record_payment` work one account/payment at a time only
-   after confirming the real payment, asset, amount, and current state.
-7. Re-read the controller nonce and create fresh sweep signatures.
-8. Resume expiry/recovery and reserve-reclaim work separately.
-9. Resume testnet-dependent CI/integration jobs one at a time.
-10. Watch for duplicate events, stale IDs, nonce changes, and unexpected state.
-11. Update verified registry timestamps and complete
-    [`incident-postmortem-template.md`](incident-postmortem-template.md).
-
-If recovery cannot be verified, keep dependent automation paused and record
-the evidence gaps.
-
-## Related documents
-
-- [`../docs/network-config.md`](../docs/network-config.md)
-- [`../docs/support.md`](../docs/support.md)
-- [`../registry/verify-contract-live.md`](../registry/verify-contract-live.md)
+- [`testnet/config/rpc-fallback.md`](../config/rpc-fallback.md)
 - [`on-call-testnet.md`](on-call-testnet.md)
 - [`incident-postmortem-template.md`](incident-postmortem-template.md)
+- [`../docs/support.md`](../docs/support.md)
