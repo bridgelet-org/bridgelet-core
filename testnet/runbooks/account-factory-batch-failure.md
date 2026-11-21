@@ -1,128 +1,90 @@
-# Runbook: Investigating AccountFactory batch_initialize Partial Failure
+# Runbook: Investigating `AccountFactory::batch_initialize` Partial Failure
 
 ## Overview
 
-This runbook covers the investigative steps to diagnose a partial failure in `AccountFactory::batch_initialize` on testnet. Since the current implementation discards per-account error details (returns `success: false, error: None`), this runbook provides a manual checklist to identify the root cause given only a failed account address.
+When `AccountFactory` is (or becomes) deployed on testnet,
+`batch_initialize` may report that one or more accounts failed **without**
+returning the underlying per-account error. This runbook is the investigative
+path for that situation: given only a **failed address** (and the batch
+transaction hash), diagnose *why* by checking each `initialize()` precondition
+manually.
+
+Write this procedure now so it is ready the moment factory deploys land on
+testnet—even if the factory build still discards detailed per-item errors.
+
+## Symptom
+
+- Batch invoke returns success with a partial-failure summary, **or** the
+  transaction fails after some accounts were created.
+- Operator has: failed account address(es), factory contract id, batch tx hash.
+- Operator does **not** have a structured per-account error code from the factory.
 
 ## Prerequisites
 
-- Access to Stellar Testnet RPC (`https://soroban-testnet.stellar.org`)
-- Testnet identity with sufficient XLM for queries (`stellar keys generate --global testnet-investigator`)
-- Contract IDs for deployed AccountFactory and EphemeralAccount WASM hash
+- Testnet identity with deploy/invoke rights for the factory path
+- Factory contract id (see `testnet/registry/account-factory-status.md` when present)
+- Ability to run read-only `stellar contract invoke` against candidate accounts
+- Current ledger awareness (`stellar network current-ledger` or RPC
+  `getLatestLedger`)
 
-## Background
+## Investigative sequence
 
-`AccountFactory::batch_initialize` deploys N ephemeral accounts in a single transaction using deterministic salts (index-based). Each account is initialized with:
-- `creator` = caller (for both `authorized_controller` and `admin`)
-- `expiry_ledger` = from request
-- `recovery_address` = from request
+Work **one failed address at a time**. Do not re-run the full batch until each
+address is classified.
 
-If any individual `initialize()` call fails, the factory catches the error but discards the error detail, returning only `AccountInitResult { success: false, error: None }`.
-
-## Investigation Steps
-
-### 1. Identify Failed Accounts
+### 1. Confirm the address and deployment
 
 ```bash
-# Get the batch_initialize transaction result
-# Look for AccountInitResult entries with success: false
-stellar contract invoke \
-  --id <ACCOUNT_FACTORY_ID> \
-  --network testnet \
-  --source testnet-investigator \
-  -- \
-  batch_initialize_count \
-  --requests '[...]'
+FAILED_ACCOUNT=<address from batch result>
+stellar contract info \
+  --id "$FAILED_ACCOUNT" \
+  --network testnet
 ```
 
-### 2. Check Individual Initialize Preconditions
+| Observation | Likely meaning |
+|---|---|
+| Contract not found / no WASM | Deploy step never committed; treat as deploy failure |
+| WASM present | Deploy may have succeeded; `initialize` likely failed or never ran |
 
-For each failed account address, manually verify each `initialize()` precondition:
+### 2. Read status if the contract exists
 
-#### A. Check if Already Initialized
 ```bash
 stellar contract invoke \
-  --id <FAILED_ACCOUNT_ADDRESS> \
+  --id "$FAILED_ACCOUNT" \
   --network testnet \
   --source testnet-investigator \
   -- \
   get_status
 ```
-- If status ≠ `Active` (0), the account was already initialized
-- Expected: `Active` (0) for uninitialized accounts
 
-#### B. Verify Expiry Ledger is in Future
+| Status / result | Next check |
+|---|---|
+| Already non-default / Active / initialized | `AlreadyInitialized` — duplicate salt or address reuse |
+| Uninitialized / error on get_status | Continue precondition checks below |
+| Invoke fails with host/RPC errors | See [rpc-outage.md](rpc-outage.md) |
+
+### 3. Check each `initialize()` precondition manually
+
+Mirror the parameters the batch would have passed (creator, expiry ledger,
+recovery address, authorized controller, admin).
+
+1. **Caller authorization** — Was the batch submitted with the expected source?
+   Re-simulate as that identity.
+2. **Expiry ledger** — Must be strictly greater than the ledger at
+   initialization time. Compare batch-time ledger (from Horizon/RPC for the
+   factory tx) to the `expiry_ledger` in the request.
+3. **Address / salt uniqueness** — Derive expected address from factory salt
+   and index; confirm no earlier successful deploy owns that id.
+4. **Admin / controller / recovery** — Non-zero, well-formed addresses; recovery
+   not accidentally equal to a forbidden sentinel if the interface forbids it.
+5. **Resource budget** — Large batches can fail mid-way; prefer
+   `batch_initialize_paginated` with small pages when diagnosing.
+
+Dry-run a single initialize when the interface allows simulation:
+
 ```bash
-# Get current ledger
-CURRENT_LEDGER=$(stellar network current-ledger --rpc-url https://soroban-testnet.stellar.org)
-
-# Check expiry from factory request
-# expiry_ledger must be > CURRENT_LEDGER
-```
-
-#### C. Check Creator Authorization
-The factory uses the caller as `creator` for both `authorized_controller` and `admin`. Verify the caller authorized the factory call:
-```bash
-# Check the factory transaction - creator must have signed
 stellar contract invoke \
-  --id <ACCOUNT_FACTORY_ID> \
-  --network testnet \
-  --source testnet-investigator \
-  -- \
-  batch_initialize_count \
-  --requests '[...]'
-```
-
-#### D. Verify WASM Hash is Set
-```bash
-# Check factory has WASM hash stored
-stellar contract invoke \
-  --id <ACCOUNT_FACTORY_ID> \
-  --network testnet \
-  --source testnet-investigator \
-  -- \
-  # (no direct getter, but deploy would fail if not set)
-```
-
-#### E. Check Salt Collision
-Each account uses salt = index (4 bytes at position 28-31). Verify no previous deployment used same salt:
-```bash
-# Compute expected address for index N
-# salt = [0,0,...,0, index_be_bytes]
-# address = deployer.with_current_contract(salt).deploy_v2(wasm_hash, ())
-```
-
-#### F. Verify EphemeralAccount WASM is Valid
-```bash
-# Check WASM hash in factory matches deployed code
-stellar contract invoke \
-  --id <EPHEMERAL_ACCOUNT_ID> \
-  --network testnet \
-  --source testnet-investigator \
-  -- \
-  get_status
-```
-If this fails with "contract not found", the WASM deployment failed.
-
-### 3. Common Failure Modes
-
-| Failure Mode | Symptoms | Resolution |
-|--------------|----------|------------|
-| `AlreadyInitialized` | Account address already has non-Active status | Use different salt/index; check for duplicate deployments |
-| `InvalidExpiry` | `expiry_ledger` ≤ current ledger | Use future ledger (current + buffer) |
-| WASM not found | Deploy fails silently | Rebuild and redeploy WASM; update factory |
-| Out of gas | Batch too large | Use `batch_initialize_paginated` with smaller pages |
-| Salt collision | Deploy fails with "already exists" | Use higher index range |
-
-### 4. Debugging Commands
-
-```bash
-# Get current testnet ledger
-stellar network current-ledger --rpc-url https://soroban-testnet.stellar.org
-
-# Simulate initialize call for specific account (dry-run)
-stellar contract invoke \
-  --id <EPHEMERAL_ACCOUNT_WASM_HASH> \
+  --id "$FAILED_ACCOUNT" \
   --network testnet \
   --source testnet-investigator \
   -- \
@@ -132,57 +94,41 @@ stellar contract invoke \
   --recovery_address <RECOVERY> \
   --authorized_controller <CALLER> \
   --admin <CALLER>
-
-# Check account status directly
-stellar contract invoke \
-  --id <FAILED_ACCOUNT> \
-  --network testnet \
-  --source testnet-investigator \
-  -- \
-  get_status
 ```
 
-### 5. Using Paginated Batch Initialize
+Capture the **first** explicit error string/code from this single-account path;
+that is the missing detail the batch discarded.
 
-To avoid resource limits and get better error isolation:
+### 4. Classify and act
 
-```bash
-# First page (limit 10)
-stellar contract invoke \
-  --id <ACCOUNT_FACTORY_ID> \
-  --network testnet \
-  --source testnet-deployer \
-  -- \
-  batch_initialize_paginated \
-  --creator <CREATOR> \
-  --requests '[...]' \
-  --params '{"limit": 10, "cursor_index": 4294967295}'
+| Classification | Operator action |
+|---|---|
+| `AlreadyInitialized` | Skip address; use a new salt/index for retries |
+| `InvalidExpiry` | Recompute expiry from *current* ledger + buffer; resubmit only failed items |
+| WASM / deploy missing | Redeploy WASM or fix factory deploy config; do not only retry initialize |
+| Auth / identity mismatch | Fix source account or auth entries; resubmit failed subset |
+| Resource / gas | Split batch; use paginated API |
+| Unknown | File incident with evidence pack below |
 
-# Subsequent pages (use next_cursor_index from previous response)
-stellar contract invoke \
-  --id <ACCOUNT_FACTORY_ID> \
-  --network testnet \
-  --source testnet-deployer \
-  -- \
-  batch_initialize_paginated \
-  --creator <CREATOR> \
-  --requests '[...]' \
-  --params '{"limit": 10, "cursor_index": 10}'
-```
+### 5. Safe retry policy
 
-## Escalation
+- Retry **only** the failed addresses, not the entire original batch, once
+  successful accounts are confirmed initialized.
+- Prefer paginated initialize to isolate the next failure.
+- Record the new transaction hash next to the original factory tx.
 
-If manual checks don't reveal the cause:
-1. Check RPC logs for the transaction
-2. Simulate the failed initialize call with `--dry-run` flag (if supported)
-3. Contact Bridgelet core team with:
-   - Failed account address
-   - Factory transaction hash
-   - Request parameters used
-   - Current ledger at time of failure
+## Evidence pack for escalation
 
-## Related Documentation
+1. Factory contract id and network passphrase  
+2. Batch transaction hash and UTC time  
+3. Failed account address(es)  
+4. Request parameters (salt/index, expiry, roles)  
+5. Results of `get_status` / single `initialize` simulation  
+6. Ledger sequence at failure time  
 
-- `testnet/registry/account-factory-status.md` - Factory deployment status
-- `testnet/registry/contract-status.md` - Contract deployment overview
-- `docs/api-reference.md` - AccountFactory API reference
+## Related documentation
+
+- `testnet/registry/account-factory-status.md` — deployment status  
+- `testnet/examples/batch-account-creation-mock.md` — batch shapes  
+- `testnet/config/expiry-ledger-testing.md` — expiry edge cases  
+- [rpc-outage.md](rpc-outage.md) — infrastructure vs contract failure  
