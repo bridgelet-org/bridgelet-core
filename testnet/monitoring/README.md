@@ -170,6 +170,11 @@ testnet_monitoring: not_configured
 ## Related documents
 
 - [`alert-thresholds.md`](alert-thresholds.md)
+- [`event-watchlist.md`](event-watchlist.md)
+- [`synthetic-transaction-plan.md`](synthetic-transaction-plan.md)
+- [`balance-thresholds.md`](balance-thresholds.md)
+- [`uptime-check-spec.md`](uptime-check-spec.md)
+- [`dashboards-plan.md`](dashboards-plan.md)
 - [`../runbooks/upgrade-verification.md`](../runbooks/upgrade-verification.md)
 - [`../runbooks/expired-account-recovery-check.md`](../runbooks/expired-account-recovery-check.md)
 - [`../registry/verify-contract-live.md`](../registry/verify-contract-live.md)
