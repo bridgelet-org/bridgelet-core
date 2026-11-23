@@ -2,91 +2,87 @@
 
 ## Purpose
 
-Use this runbook when an off-chain signer or relayer's cached
-`SweepController` nonce no longer matches the live testnet contract.
+Use this runbook when an off-chain signing system or relayer's locally tracked nonce drifts out of sync with the live testnet `SweepController` contract.
 
-The authoritative value is always the result of:
+The authoritative nonce is **always** the value returned by querying the on-chain contract directly:
 
 ```text
 SweepController::get_nonce()
 ```
 
-An off-chain counter is a cache and queue coordination aid. It must never be
-used to overwrite, guess, or decrement contract state.
+An off-chain counter maintained in an integrator's backend, database, or worker memory is strictly a local queue coordination cache. It must **never** be used to overwrite, guess, or decrement contract state.
 
-This nonce is distinct from a Stellar account sequence number, an
-`expiry_ledger`, and any per-account counter. There is one security nonce per
-`SweepController` deployment, shared by every account it services.
+> **Contextual Reference (`tools/sweep-signer`):** Integrators often use `tools/sweep-signer` (or an equivalent backend signing library) to generate the cryptographic `auth_signature` passed to `SweepController::execute_sweep`. The CLI requires an explicit `--nonce <u64>` argument:
+> ```bash
+> sweep-signer sign --contract-id <CONTROLLER_ID> --destination <DEST> --nonce <NONCE> --signer-seed-hex <SEED>
+> ```
+> If an off-chain orchestration system tracks nonces independently without querying the contract before each signing operation, the local counter will inevitably fall out of sync with on-chain reality.
 
-## Signed message and nonce lifecycle
+---
 
-The current controller signs and verifies this digest:
+## Nonce Lifecycle & Digest Structure
+
+The on-chain `SweepController` verifies signatures using this SHA-256 digest:
 
 ```text
 SHA256(
     destination.to_xdr()
-    || nonce encoded as an unsigned u64 in 8-byte big-endian order
+    || nonce (unsigned u64 in 8-byte big-endian format)
     || sweep_controller_id.to_xdr()
 )
 ```
 
-The ephemeral-account address is not included in the current digest. Preserve
-the exact destination and controller ID used to create a signature.
+Key invariant rules:
+1. **Scope:** There is exactly **one** global `nonce` per deployed `SweepController` instance, shared across all ephemeral accounts that route through it. It is **not** per ephemeral account, not an `expiry_ledger`, and not a Stellar account sequence number.
+2. **Atomic Advancement:** When `execute_sweep` completes successfully, the contract increments `nonce += 1`.
+3. **Reverted Transactions:** If a transaction fails or reverts (e.g., due to an error in the child ephemeral account), the transaction is atomic and the on-chain nonce does **not** advance.
+4. **No Write Reset:** There is no contract method to reset or decrement the on-chain nonce.
 
-For a committed `execute_sweep` transaction, the controller verifies the
-signature and advances its nonce as part of the atomic transaction. A reverted
-transaction does not persist a nonce increment. Query the chain after any
-uncertain result rather than predicting rollback from a local counter.
+---
 
-A `sweep` event can be emitted by more than one controller path in current
-source. Do not infer the on-chain nonce by counting events; `get_nonce` is the
-authority.
+## Symptoms & Failure Mode Detection
 
-## Symptoms
+### The Primary Failure Signature
 
-Typical indicators include:
+The definitive symptom of nonce desynchronization is:
 
-- repeated signature-verification failures after a successful sweep;
-- a signature that looks correct until another relayer submits;
-- a local nonce lower or higher than the contract value;
-- a local increment after a failed or unknown transaction;
-- multiple workers signing from the same cached value;
-- stale signatures after a testnet reset or controller redeployment; or
-- a signature failure caused by a different destination, contract ID, signer
-  key, or XDR encoding.
+> **Repeated signature-verification failures (`Error::SignatureVerificationFailed` / Error Code 1) on `SweepController::execute_sweep`, despite the integrator using a seemingly correct signature.**
 
-A fresh signature failure does not by itself prove nonce desynchronization.
+Integrators typically observe:
+- The signing key is valid and corresponds to `authorized_signer`.
+- The destination address is correct and matches what was signed.
+- The controller contract ID is correct and points to the live deployment.
+- The signature is properly encoded (64-byte Ed25519 signature).
+- **Yet the transaction repeatedly reverts with `Error(Contract, #1)`.**
 
-## Immediate safety actions
+Because the signature seems structurally and cryptographically sound, teams often suspect bad keys, serialization bugs, or contract regressions, when the true root cause is that the off-chain system signed with a stale or advanced nonce.
 
-1. Pause signing and submission for the affected controller.
-2. Preserve the local nonce, destination, controller ID, transaction hashes,
-   UTC time, and approximate ledger.
-3. Do not reuse any signature built with a stale or uncertain nonce.
-4. Do not retry an in-flight transaction before resolving its result by hash.
-5. Serialize all remaining work per controller ID.
-6. Do not call a write method to "reset" the contract nonce; no such method is
-   required or documented.
-7. Keep signing seeds, secret keys, and full signatures out of tickets and
-   public logs.
+### Common Drift Scenarios
 
-## Detection procedure
+| Scenario | What Happened | Consequence |
+|---|---|---|
+| **Missed On-Chain Execution (`L < C`)** | Another relayer worker or test run executed a sweep, advancing the on-chain nonce from $C$ to $C + 1$. The local system retained $L = C$. | Next signature is built with stale nonce $L$. Rejected on-chain with `SignatureVerificationFailed`. |
+| **Optimistic Increment on Revert (`L > C`)** | The off-chain system incremented its local counter upon transaction submission, but the transaction reverted or dropped. | The contract nonce remained at $C$, while the off-chain system now signs with $L > C$. Rejected on-chain. |
+| **Testnet Reset or Contract Redeployment** | Testnet was reset or `SweepController` was redeployed. On-chain nonce reset to `0`. | Off-chain system continues signing with high nonce from previous deployment. Rejected on-chain. |
+| **Concurrent Uncoordinated Workers** | Two parallel workers queried `get_nonce()` at the same time and both received $C$. | Worker A commits; Worker B's transaction fails with `SignatureVerificationFailed` because the nonce is now $C + 1$. |
 
-### 1. Capture incident context
+---
 
-Record:
+## Immediate Safety Protocol
 
-- exact controller contract ID and network passphrase;
-- local/cached nonce used for each failed signature;
-- destination used in the invocation;
-- transaction hash, if submitted;
-- whether the path was `execute_sweep` or another controller method;
-- approximate ledger and UTC time; and
-- all workers or services that can sign for this controller.
+1. **Pause Signing Queue:** Halt all automated signing and submission jobs for the affected controller contract ID.
+2. **Do Not Guess Nonces:** Never loop through arbitrary integer nonces trying to find one that succeeds.
+3. **Never Retry Reverted Signatures:** An Ed25519 signature commits to the exact nonce bytes. A rejected signature cannot be reused.
+4. **Preserve Incident Logs:** Record the local cached nonce, destination address, controller contract ID, and recent transaction hashes.
+5. **Protect Secrets:** Never post private keys, seed phrases, or raw signing seeds in tickets or incident channels.
 
-### 2. Query the authoritative nonce
+---
 
-Use a confirmed read-only simulation or dry-run invocation:
+## Detection & Querying Procedure
+
+### Step 1: Query the Authoritative On-Chain Nonce Directly
+
+To detect desynchronization, query the live `SweepController` contract directly via a read-only simulation:
 
 ```bash
 stellar contract invoke \
@@ -98,176 +94,149 @@ stellar contract invoke \
   get_nonce
 ```
 
-Record the result as an unsigned decimal integer. An automated worker should
-use the SDK/RPC simulation equivalent and must not submit a transaction.
+*Or via Soroban RPC / SDK equivalent:*
+Send a `simulateTransaction` request for the contract call `get_nonce()`. Parse the returned `xdr:ScVal` as a `u64`.
 
-A successful `0` is valid, but the storage getter also defaults to zero when
-the key is absent. Zero alone does not prove controller initialization.
+Record the result as an unsigned integer $C$.
 
-If the query fails, verify the RPC, network, exact controller ID, testnet
-reset status, and deployed interface. Do not reset the local cache merely
-because the query failed.
-
-### 3. Compare the values
+### Step 2: Compare Local Nonce with On-Chain Nonce
 
 Let:
+- $L$ = Nonce tracked in local database / memory / `tools/sweep-signer` input
+- $C$ = Authoritative on-chain value returned by `get_nonce()`
 
 ```text
-L = local/cached nonce
-C = value returned by get_nonce()
+                    ┌────────────────────────┐
+                    │ Compare L against C    │
+                    └───────────┬────────────┘
+                                │
+         ┌──────────────────────┼──────────────────────┐
+         ▼                      ▼                      ▼
+      [ L < C ]              [ L > C ]              [ L == C ]
+   Signer is Behind       Signer is Ahead       Nonces Aligned
+         │                      │                      │
+         ▼                      ▼                      ▼
+  Missed committed tx.   Optimistic increment   Check destination,
+  Invalidate local cache  after tx revert.       contract ID, key,
+  and update L = C.       Reconcile by tx hash   or XDR encoding.
+                          and reset L = C.
 ```
 
-| Comparison | Interpretation | Action |
+### Evaluation Matrix
+
+| State | Interpretation | Action |
 |---|---|---|
-| `L == C` | cache is currently aligned | inspect destination, controller ID, key, XDR, and deployed code if the signature still fails |
-| `L < C` | signer is behind the chain | discard signatures made with `L`; fetch `C` and sign again |
-| `L > C` | local state is ahead or based on a different deployment/path | pause and reconcile before resetting the cache |
-| `C - L > 1` | multiple operations or a tracking bug likely occurred | stop the queue and account for every pending operation |
-| `C < previous observed C` | reset, contract change, or bad history | quarantine the baseline; do not reuse the old counter |
+| **$L < C$** | **Local signer is behind the chain.** One or more sweeps committed without being recorded locally. | 1. Invalidate all pending signatures generated with nonce $< C$.<br>2. Update local tracking store to $C$.<br>3. Re-sign pending sweeps using $C$. |
+| **$L > C$** | **Local signer is ahead of the chain.** The off-chain system optimistically incremented for a transaction that reverted or failed in the mempool. | 1. Search Horizon / Soroban RPC for recent transaction hashes.<br>2. Discard stale pending signatures.<br>3. Reset local tracking store to $C$.<br>4. Re-sign from $C$. |
+| **$L == C$** | **Nonces are aligned.** Signature failure is **not** caused by nonce desync. | Re-verify: (a) `destination` address matches signed address exactly, (b) `contract_id` matches, (c) signer key matches `authorized_signer`, (d) no extra fields in digest. |
+| **$C == 0$** | **Fresh deployment or testnet reset.** | If $L > 0$, the controller was redeployed or reset. Update local baseline to 0. Verify controller initialization. |
 
-Never modify the on-chain value to match the local cache.
+---
 
-### 4. Correlate committed activity
+## Step-by-Step Resynchronization Procedure
 
-Inspect finalized controller and account activity over the relevant ledger
-range. Correlate:
+Follow these steps to restore healthy signing operations:
 
-- controller ID;
-- ephemeral-account ID;
-- destination;
-- transaction hash and ledger;
-- final transaction result; and
-- controller `sweep` and account `swept_mul` events when available.
+### 1. Acquire Local Mutex Lock
+Ensure only one worker or process accesses the signing pipeline for `<SWEEP_CONTROLLER_ID>`.
 
-Events support diagnosis but do not replace `get_nonce`. A failed Soroban
-transaction is atomic and should not leave a nonce increment, state change,
-event, or transfer committed.
+### 2. Direct On-Chain Query
+Invoke `get_nonce` directly on the target network:
+```bash
+AUTH_NONCE=$(stellar contract invoke \
+  --simulate-only \
+  --id <SWEEP_CONTROLLER_ID> \
+  --network testnet \
+  --source <READER_IDENTITY> \
+  -- \
+  get_nonce | tr -d '"')
 
-### 5. Verify every signed component
+echo "Authoritative on-chain nonce: $AUTH_NONCE"
+```
 
-If `L == C` and a new signature still fails, stop treating it as a nonce
-problem. Check, in order:
+### 3. Clear Stale Signatures
+Purge any pre-generated signatures or queued tasks that were signed using the stale nonce $L$.
 
-1. The destination is byte-for-byte the address used in the signature.
-2. The controller ID is the same testnet deployment.
-3. The nonce is exactly eight bytes, unsigned big-endian.
-4. Destination and controller addresses use the same Soroban `Address::to_xdr`
-   encoding as the contract.
-5. The private key matches the controller's `authorized_signer` public key.
-6. No timestamp or extra field was added to the current message format.
-7. The signature is exactly 64 bytes and was not truncated or text-mangled.
-8. The deployed WASM/interface is the expected version.
+### 4. Update Off-Chain Datastore
+Set the local nonce tracker in your database or service configuration:
+```sql
+UPDATE relayer_state SET current_nonce = <AUTH_NONCE> WHERE controller_id = '<SWEEP_CONTROLLER_ID>';
+```
 
-A successful `get_nonce` call does not prove any of those values.
+### 5. Re-Sign Using `tools/sweep-signer`
+Generate a fresh signature using the authoritative nonce:
+```bash
+cargo run --bin sweep-signer -- sign \
+  --contract-id <SWEEP_CONTROLLER_ID> \
+  --destination <DESTINATION_ADDRESS> \
+  --nonce $AUTH_NONCE \
+  --signer-seed-hex <SIGNER_SEED_HEX>
+```
 
-## Recovery: local nonce is behind the chain
+### 6. Submit and Await Finalization
+Submit the transaction to testnet and hold the lock until the transaction is definitively finalized in a ledger:
+```bash
+stellar contract invoke \
+  --id <SWEEP_CONTROLLER_ID> \
+  --network testnet \
+  --source <RELAYER_IDENTITY> \
+  -- \
+  execute_sweep \
+  --account <EPHEMERAL_ACCOUNT_ID> \
+  --destination <DESTINATION_ADDRESS> \
+  --auth_signature <FRESH_AUTH_SIGNATURE>
+```
 
-1. Hold the per-controller signing lock.
-2. Read and record `C`.
-3. Mark every pending signature built with a nonce below `C` as invalid.
-4. Discard those signatures.
-5. Read `get_nonce` again immediately before the next signature.
-6. Sign the exact destination and controller ID with that fresh value.
-7. Submit while holding the lock and wait for a definitive result.
-8. Re-read `get_nonce` and record the progression.
+### 7. Confirm Incremental Advancement
+Verify that the on-chain nonce advanced by exactly 1:
+```bash
+stellar contract invoke \
+  --simulate-only \
+  --id <SWEEP_CONTROLLER_ID> \
+  --network testnet \
+  --source <READER_IDENTITY> \
+  -- \
+  get_nonce
+```
+Expected output: `$AUTH_NONCE + 1`.
 
-Do not change the nonce bytes inside an already signed message and expect the
-old signature to remain valid.
+### 8. Release Mutex Lock
+Resume normal queue processing.
 
-## Recovery: local nonce is ahead of the chain
+---
 
-1. Pause all signers and submissions.
-2. Query and record `C`.
-3. Determine whether the local increment came from a failed/unknown
-   transaction, a different controller deployment, a nonstandard path, or a
-   bookkeeping bug.
-4. Reconcile every pending transaction by hash.
-5. Discard signatures that depend on the invalid local value.
-6. Remove the persistent local counter or set the cache to `C` only after the
-   chain state is understood.
-7. Re-read `C` immediately before each new signature.
+## Architectural Best Practices to Prevent Desync
 
-If `C` unexpectedly decreased for the same contract ID, treat the deployment
-or reset epoch as changed and require fresh verification.
+To permanently prevent nonce desynchronization in production and testnet relayers:
 
-## Recovery: concurrent signers
+1. **Read-Before-Sign Pattern:** Do not maintain a long-lived local nonce counter. Query `SweepController::get_nonce()` via simulation immediately prior to constructing each signature.
+2. **Queue Serialization (Single Flight):** Enforce strict FIFO submission per `SweepController` ID. Never allow multiple workers to sign sweeps concurrently for the same controller.
+3. **Do Not Optimistically Increment:** Only advance local state after receiving confirmed transaction finalization from Soroban RPC (`getTransaction` status `SUCCESS`).
+4. **Reconcile Uncertain Transactions by Hash:** If a submission times out or network connection drops, do **not** assume failure or retry with a new nonce. Query the transaction status by hash first. If it committed, the nonce advanced; if it dropped, the nonce did not.
+5. **Handle Testnet Resets:** Reset local caches to 0 whenever a new contract deployment ID is detected.
 
-Use one queue or mutex per `SweepController` contract ID:
+---
 
-1. acquire the controller lock;
-2. read `get_nonce`;
-3. sign and submit while holding the lock;
-4. wait for a definitive transaction result;
-5. re-read `get_nonce`; and
-6. release the lock.
+## Fast Triage Checklist
 
-Do not allow two workers to sign from the same cached value. The first
-successful committed sweep invalidates the other signature.
+```text
+[ ] Paused signing queue for the controller ID.
+[ ] Queried live on-chain nonce directly using get_nonce().
+[ ] Compared local nonce (L) with on-chain nonce (C).
+[ ] Discarded invalid/stale signatures.
+[ ] Re-signed payload with the verified on-chain nonce.
+[ ] Submitted sweep and verified successful execution.
+[ ] Confirmed on-chain nonce advanced by exactly +1.
+[ ] Resumed queue with serialized worker locks.
+```
 
-A timeout releases no lock automatically until the submitted transaction's
-result is resolved.
+---
 
-## Recovery: fresh signature still fails
+## Related Documentation
 
-When `L == C`, build a new signature only after verifying the other components
-above. If it still fails, classify the incident as destination, controller ID,
-signer key, XDR encoding, deployed-version, or host-verification failure—not
-as nonce desynchronization.
-
-Preserve the diagnostic result and do not repeatedly submit different payloads
-to guess which field is wrong.
-
-## Verification and closure
-
-The incident is closed only when:
-
-- the controller lock/queue is consistent;
-- no stale or unknown transaction remains;
-- a new signature is built from a fresh authoritative nonce;
-- destination and controller ID are unchanged;
-- a committed `execute_sweep` advances the nonce by one, or the failure is
-  reclassified with direct evidence; and
-- the expected account state, controller event, and destination balance are
-  correlated for a successful sweep.
-
-For a successful sweep, also query the account's terminal state and relevant
-balances. A controller event alone is not sufficient evidence of value
-movement.
-
-## Escalation
-
-Escalate to the contract/testnet maintainers when:
-
-- `get_nonce` fails for a previously verified controller;
-- the nonce decreases in the same deployment/reset epoch;
-- a transaction succeeded but the nonce did not change as expected;
-- a reverted transaction appears to have committed a nonce increment;
-- the same contract ID resolves to an unexpected code/interface;
-- all configured IDs disappear after a suspected testnet reset; or
-- the destination or signer identity may be wrong.
-
-Attach the contract ID, local and on-chain nonces, redacted signature metadata,
-transaction hashes, finalized status, relevant events, and deployed code
-identity. Never attach signing seeds or secret keys.
-
-## Prevention checklist
-
-- [ ] Read `get_nonce` immediately before every signature.
-- [ ] Serialize sign-and-submit per controller.
-- [ ] Hold the lock through definitive transaction finalization.
-- [ ] Reconcile uncertain submissions by hash before retrying.
-- [ ] Treat testnet reset/deployment changes as a new nonce epoch.
-- [ ] Log the controller ID, nonce used, destination ID, and transaction hash,
-      but not the secret key or full reusable signature.
-- [ ] Alert on nonce regression and unexplained jumps.
-- [ ] Test concurrent-worker and unknown-transmission scenarios in the future
-      signer implementation.
-
-## Related documents
-
-- [`../config/nonce-tracking.md`](../config/nonce-tracking.md)
-- [`failed-sweep-signature.md`](failed-sweep-signature.md)
-- [`../registry/event-topics.md`](../registry/event-topics.md)
-- [`../registry/verify-contract-live.md`](../registry/verify-contract-live.md)
-- [`../../docs/SIGNATURE_FORMAT.md`](../../docs/SIGNATURE_FORMAT.md)
-- [`../../tools/sweep-signer/`](../../tools/sweep-signer/)
+- [`failed-sweep-signature.md`](failed-sweep-signature.md) — Fast triage for rejected sweep signatures
+- [`stuck-ephemeral-account.md`](stuck-ephemeral-account.md) — Resolving stuck accounts
+- [`../config/nonce-tracking.md`](../config/nonce-tracking.md) — Architecture of controller nonce tracking
+- [`../registry/event-topics.md`](../registry/event-topics.md) — Controller `sweep` and account `swept_mul` events
+- [`../../docs/SIGNATURE_FORMAT.md`](../../docs/SIGNATURE_FORMAT.md) — Official specification for sweep signatures
+- [`../../tools/sweep-signer/`](../../tools/sweep-signer/) — Reference implementation CLI for sweep signing

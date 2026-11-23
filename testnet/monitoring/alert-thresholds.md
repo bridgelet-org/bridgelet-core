@@ -1,106 +1,117 @@
-# Testnet Alert Threshold: Expiry-to-Sweep Ratio
+# Testnet Alert Policy Proposal: Sustained Rise in Account Expirations
 
 ## Status
 
-> **Proposed threshold only.** No collector, evaluator, dashboard, or alert
-> destination is active in this repository. This document defines a concrete
-> starting policy for a future implementation.
+> **Planning Document Only:** This document proposes a concrete alerting policy for testnet monitoring. No automated alert evaluator, pager, or collector is currently active in this repository. This specification defines the operational thresholds, time windows, and triage procedures for a future monitoring implementation.
 
-## Signal
+---
 
-Track two event types in finalized ledgers:
+## Purpose & Problem Statement
 
-| Symbol | Contract | Meaning |
-|---|---|---|
-| `AccountExpired` / topic `expired` | `EphemeralAccount` | A successful `expire()` or `recover()` call |
-| `SweepCompleted` / topic `sweep` | `SweepController` | A controller `execute_sweep()` or `claim()` completion event |
+In a healthy Bridgelet integration on testnet, ephemeral accounts receive payments and are subsequently swept by an off-chain relayer or automated worker before reaching their configured `expiry_ledger`. When an account is swept successfully, the `SweepController` contract emits a `SweepCompleted` event.
 
-For a configured scope, let:
+Conversely, if an account passes its `expiry_ledger` without being swept, an operator or automated fallback must trigger `expire()` or `recover()`, which transitions the account to `Expired` and emits an `AccountExpired` event.
+
+### Why a Sustained Shift Matters
+
+While occasional expirations are normal (e.g. during manual testing or abandoned payment flows), a **sustained shift toward more accounts expiring unswept than being successfully swept** is a critical operational signal indicating:
+
+1. **Integration-Side Bug or Relayer Outage:**
+   - A partner relayer or sweeper daemon has crashed, hung, or lost network connectivity.
+   - The relayer account has run out of testnet XLM to pay transaction fees.
+   - The off-chain signer's nonce tracking has fallen out of sync with `SweepController` (see [`../runbooks/nonce-desync.md`](../runbooks/nonce-desync.md)), causing all sweep signatures to fail.
+   - Signing keys were rotated incorrectly.
+2. **Contract Regression:**
+   - A newly deployed WASM contract version introduced a revert inside `execute_sweep()`, `sweep()`, or token transfer logic.
+   - Authorization gates (`require_auth`) are rejecting valid controller invocations.
+   - Resource limits (CPU instructions or memory bytes) are exceeded during sweep execution.
+3. **Network Congestion or Fee Spikes:**
+   - Relayer fee bids are insufficient to land transactions within the ledger window before `expiry_ledger`.
+
+Detecting this shift early prevents customer funds from remaining stuck or falling back to the recovery address unexpectedly.
+
+---
+
+## Monitored Signals & Topics
+
+The policy monitors two primary Soroban event topics from finalized ledgers:
+
+| Signal | Source Contract | Event Topic | Event Payload Struct | Meaning |
+|---|---|---|---|---|
+| **$E$ (Expirations)** | `EphemeralAccount` | `expired` | `AccountExpired` | An account expired and executed the recovery fallback path via `expire()` or `recover()`. |
+| **$S$ (Sweeps)** | `SweepController` | `sweep` | `SweepCompleted` | A sweep was successfully verified and executed via `execute_sweep()` (or claimed via `claim()`). |
+
+### Event Collection & Deduplication Invariants
+
+- **Deduplication Key:** Events must be uniquely identified by the tuple:
+  ```text
+  (contract_id, ledger_sequence, transaction_hash, event_index)
+  ```
+- **Scope Isolation:** Only count events originating from verified, active contract deployments (see [`../registry/contract-status.md`](../registry/contract-status.md)).
+- **Do Not Double Count:** The child `EphemeralAccount` emits a `swept_mul` event (topic `swept_mul`) during a sweep. Do **not** count `swept_mul` as a separate sweep event; monitor only the controller's `sweep` topic for $S$.
+
+---
+
+## Proposed Ratio-Based Alert Thresholds
+
+### Primary Alert: `sustained_expiry_to_sweep_breach`
+
+Trigger an alert when the ratio of expirations to sweeps exceeds the threshold continuously over the specified evaluation window.
 
 ```text
-E = unique AccountExpired events
-S = unique SweepCompleted events
-```
-
-The two counts are intentionally not the same metric:
-
-- `expired` is not emitted automatically when the ledger reaches
-  `expiry_ledger`; an operator or relayer must successfully call `expire()` or
-  `recover()`.
-- `sweep` is a controller completion event, not by itself proof of a token
-  balance change. The current source also emits it from `claim()`.
-- Always filter by the expected account and controller contract IDs. Do not
-  count the account-side `swept_mul` event as a second `SweepCompleted` event.
-
-## Proposed starting threshold
-
-Page for a sustained rise when:
-
-```text
-S > 0
-E >= 2 * S
+E >= 2.0 * S
+AND
 E + S >= 10
+CONDITION SUSTAINED FOR: 15 consecutive minutes
 ```
 
-The condition must remain true for 15 consecutive minutes.
+### Parameter Specification
 
-| Parameter | Starting value |
-|---|---:|
-| Trailing lookback | 30 minutes |
-| Evaluation interval | Every 5 minutes |
-| Ratio | `E / S >= 2.0` |
-| Sustained duration | 15 minutes |
-| Minimum sample | 10 total relevant events |
-| Resolve after | Condition false for 15 consecutive minutes |
+| Parameter | Specification | Operational Justification |
+|---|---:|---|
+| **Lookback Window** | **30 minutes** (rolling) | Sufficient sample window to absorb short-term traffic spikes or bursty deposit activity. |
+| **Evaluation Interval** | **5 minutes** | Evaluated every 5 minutes against finalized ledger ranges. |
+| **Ratio Threshold ($R$)** | **$\ge 2.0$** ($E \ge 2 \times S$) | Flags when at least 2 accounts expire for every 1 successful sweep. Under normal operations, $E / S$ is typically $< 0.1$. |
+| **Minimum Sample Volume** | **$\ge 10$ total events** ($E + S \ge 10$) | Prevents false positives during quiet testnet periods (e.g. 1 expiration and 0 sweeps during an idle hour). |
+| **Sustained Duration** | **15 consecutive minutes** | Requires the condition to be true across 3 consecutive 5-minute evaluations, filtering transient test batches or one-off manual tests. |
+| **Resolve Condition** | **15 consecutive minutes** below threshold | Alert auto-resolves only when the ratio remains $< 2.0$ for 3 consecutive evaluation cycles. |
 
-The 30-minute window filters short bursts. The 15-minute sustain requirement
-prevents a single batch from paging. The minimum sample prevents one event in
-an otherwise quiet testnet from creating a noisy ratio.
+---
 
-This is an initial operating threshold, not a statistically validated SLO.
-Calibrate it after at least seven days of representative data.
+## Edge Case: Zero-Sweep Silence (`S == 0`)
 
-## Zero-sweep case
+When no sweeps occur during the window ($S = 0$), the ratio $\frac{E}{S}$ is mathematically undefined. This must **not** be treated as a null value or divide-by-zero error.
 
-The ratio is undefined when `S == 0`. Do not represent that case as an
-infinite ratio or as a 100% failure rate.
-
-Use a separate diagnostic condition:
+A dedicated silence alert must be evaluated:
 
 ```text
 S == 0
+AND
 E >= 10
-condition persists for 15 minutes
+CONDITION SUSTAINED FOR: 15 consecutive minutes
 ```
 
-Label it `sweep_completion_silence`, not `expiry_to_sweep_breach`. It can
-indicate a stopped relayer, an event-indexing problem, a low-traffic period, or
-a contract regression; it does not identify the cause by itself.
+- **Alert Name:** `sweep_completion_silence`
+- **Severity:** High / Pager
+- **Operational Meaning:** Accounts are actively timing out and expiring, but **zero sweeps** are succeeding. This strongly points to a complete relayer failure, an authentication mismatch, or a broken sweep contract method.
 
-If both counts are zero, the standing-state health check must determine whether
-the deployment is idle or unavailable. Event absence alone is not an outage.
+If both $E == 0$ and $S == 0$, the system is considered idle; no alert is generated.
 
-## Collection requirements
+---
 
-A future collector must:
+## Event Ingestion & Querying
 
-1. Read finalized Soroban ledger ranges and persist a durable cursor.
-2. Resume after the last processed ledger without reusing a stale cursor.
-3. Deduplicate by contract ID, ledger, transaction hash, and event index.
-4. Decode the deployed interface; testnet WASM may differ from current source.
-5. Keep the network/reset epoch and contract allowlist with the metrics.
-6. Record RPC errors, skipped ledgers, and cursor lag as data-quality failures.
-7. Never convert an RPC error or incomplete page into zero events.
-
-Example bounded queries:
+A future collector or monitoring daemon can query finalized event streams via Soroban RPC:
 
 ```bash
+# Query AccountExpired events (topic: "expired")
 stellar contract events \
-  --contract-id <EA_CONTRACT_ID> \
+  --contract-id <EPHEMERAL_ACCOUNT_ID> \
   --start-ledger <START_LEDGER> \
   --filter '{"topics":[["expired"]]}' \
   --network testnet
 
+# Query SweepCompleted events (topic: "sweep")
 stellar contract events \
   --contract-id <SWEEP_CONTROLLER_ID> \
   --start-ledger <START_LEDGER> \
@@ -108,70 +119,95 @@ stellar contract events \
   --network testnet
 ```
 
-Replace every placeholder and retain the raw results and finalized ledger range.
+---
 
-## Alert payload
+## Alert Payload Specification
 
-A future alert should include:
+When an alert triggers, the monitoring webhook or notification payload should contain:
 
-- environment and testnet reset epoch;
-- `window_start` and `window_end` ledger/time;
-- collector cursor and lag;
-- `account_expired_count` (`E`);
-- `sweep_completed_count` (`S`);
-- calculated ratio or the zero-sweep diagnostic reason;
-- minimum-sample and sustained-duration state;
-- contract IDs included in the calculation;
-- RPC/indexer health; and
-- links to this policy and the recovery investigation procedures.
-
-The alert must not call `expire()`, `recover()`, `sweep()`, `claim()`, or any
-other state-changing method.
-
-## Initial investigation
-
-When the threshold is breached:
-
-1. Confirm the collector cursor covers the complete window and the contract
-   allowlist is correct.
-2. Confirm delayed event ingestion is not inflating `E` or suppressing `S`.
-3. Compare `created`, `payment`, and `multi_pay` activity with expirations.
-4. Find accounts whose `expiry_ledger` has passed but which have no `expired`
-   event; these may indicate a stopped expiry worker.
-5. Inspect finalized `SweepController::execute_sweep` transactions, relayer
-   logs, and signature failures.
-6. Re-read the current `get_nonce` and reconcile the last successful signed
-   operation. Do not infer the nonce solely from event counts.
-7. Check `upgrade-history.md` and the deployed WASM identity for a recent
-   behavior or interface change.
-8. For an expiry discrepancy, reconcile `recovery_address` and each asset's
-   balance independently.
-
-## Baseline and activation
-
-Before enabling a page:
-
-- [ ] Reconcile the current deployment records and verify live contract IDs.
-- [ ] Record the deployed event ABI and code/WASM identity.
-- [ ] Run the collector in report-only mode for at least seven days.
-- [ ] Confirm how `claim()` should be counted for the intended metric.
-- [ ] Label the initial signal as reported controller completions, not funds
-      received.
-- [ ] Test a ratio breach, zero-sweep case, RPC outage, skipped ledger, and
-      recovery below threshold.
-- [ ] Assign a primary and backup owner and a non-production alert route.
-- [ ] Obtain maintainer approval for the threshold, window, and sample size.
-
-Until all items are complete, the operational status remains:
-
-```text
-expiry_to_sweep_alert: not_configured
+```json
+{
+  "alert_name": "sustained_expiry_to_sweep_breach",
+  "severity": "CRITICAL",
+  "environment": "testnet",
+  "timestamp_utc": "2026-11-23T20:00:00Z",
+  "window": {
+    "lookback_minutes": 30,
+    "start_ledger": 1245600,
+    "end_ledger": 1245960
+  },
+  "metrics": {
+    "account_expired_count": 18,
+    "sweep_completed_count": 4,
+    "ratio": 4.5,
+    "threshold": 2.0,
+    "sustained_minutes": 15
+  },
+  "contracts": {
+    "sweep_controller": "CAJB4RRM5JRPXLITC5JUA7Q3LU2WQJDRPXVKMORXWHJJBPZRYWDJ5V4S",
+    "ephemeral_account_template": "CB7Z22TXR6ZKG7MDXIGJL6QVQQ3L3DQOFR6JV325NZK4CTYWFPVZBBP3"
+  },
+  "runbook_links": [
+    "testnet/runbooks/nonce-desync.md",
+    "testnet/runbooks/failed-sweep-signature.md",
+    "testnet/runbooks/expired-account-recovery-check.md"
+  ]
+}
 ```
 
-## Related documents
+---
 
-- [`README.md`](README.md)
-- [`../registry/event-topics.md`](../registry/event-topics.md)
-- [`../registry/verify-contract-live.md`](../registry/verify-contract-live.md)
-- [`../registry/upgrade-history.md`](../registry/upgrade-history.md)
-- [`../runbooks/expired-account-recovery-check.md`](../runbooks/expired-account-recovery-check.md)
+## Incident Response & Triage Workflow
+
+When `sustained_expiry_to_sweep_breach` or `sweep_completion_silence` fires, the on-call engineer should follow this checklist:
+
+```text
+[Alert Fired: Expiry-to-Sweep Breach]
+                 │
+                 ▼
+1. Check Relayer Health
+   ├── Is the relayer process running?
+   ├── Is the relayer wallet funded with XLM?
+   └── Are relayer logs showing submission rejections?
+                 │
+                 ▼
+2. Check for Nonce Desync
+   ├── Query SweepController::get_nonce() directly.
+   ├── Compare with relayer's cached nonce.
+   └── If drifted, apply testnet/runbooks/nonce-desync.md.
+                 │
+                 ▼
+3. Check Soroban RPC & Network
+   ├── Is testnet experiencing elevated fee surges?
+   └── Are transactions timing out before ledger close?
+                 │
+                 ▼
+4. Check Contract Integrity
+   ├── Review testnet/registry/upgrade-history.md for recent deployments.
+   ├── Verify WASM hash on-chain against expected build.
+   └── Check for recent contract reverts or bug reports.
+```
+
+---
+
+## Baseline Calibration & Rollout Plan
+
+Before enabling paging alerts based on this specification:
+
+1. **Deploy Collector in Report-Only Mode:** Run the event collector for at least **7 consecutive days** without paging.
+2. **Establish Normal Ratios:** Determine baseline $E / S$ ratios during normal automated integration tests and partner sandbox runs.
+3. **Simulate Failure Injection:**
+   - Stop a test relayer and verify that `sweep_completion_silence` fires after 15 minutes.
+   - Submit batch expirations to verify that isolated batches ($< 15$ min) do not cause alert flapping.
+4. **Sign-off:** Obtain approval from core maintainers and integration partners before configuring PagerDuty routes.
+
+---
+
+## Related Documentation
+
+- [`README.md`](README.md) — Monitoring overview and observability architecture
+- [`explorer-links.md`](explorer-links.md) — Pre-filtered explorer links for testnet contracts
+- [`../runbooks/nonce-desync.md`](../runbooks/nonce-desync.md) — Remediation for relayer signature and nonce drift
+- [`../runbooks/expired-account-recovery-check.md`](../runbooks/expired-account-recovery-check.md) — Verifying recovery address fallback behavior
+- [`../runbooks/failed-sweep-signature.md`](../runbooks/failed-sweep-signature.md) — Triage for rejected sweep signatures
+- [`../registry/event-topics.md`](../registry/event-topics.md) — Event topics reference for Soroban contracts
