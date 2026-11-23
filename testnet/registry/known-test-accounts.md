@@ -66,6 +66,7 @@ stellar contract invoke \
 3. **Document in this file** - Update table immediately after creation
 4. **Monitor status** - Periodically verify they remain Active/PaymentReceived
 5. **Rotate if needed** - If an account is accidentally swept, create replacement
+6. **Maintain minimum balance** - Ensure fee-payer identities remain funded above thresholds in `testnet/monitoring/balance-thresholds.md`
 
 ## Usage in Documentation
 
@@ -83,6 +84,7 @@ Example reference:
 - `testnet/registry/contract-status.md` - Contract deployment status
 - `testnet/registry/verify-contract-live.md` - Health check procedures
 - `docs/api-reference.md` - CLI examples using known accounts
+- `testnet/monitoring/balance-thresholds.md` - Minimum balance thresholds and Friendbot re-funding triggers
 
 ---
 
@@ -108,6 +110,7 @@ The rows below are templates only. Every value is a `PLACEHOLDER`; copy a row wh
 - **Far-future expiry**: set `expiry_ledger` at least one year out, preferably 10+ years (~63M ledgers), so the account does not lapse during its documentation lifetime.
 - **Never swept**: these accounts must never be swept or have their reserve reclaimed. Do not route them through `SweepController::execute_sweep()` / `claim()` or any sweep runbook.
 - **Labeled non-production**: in every doc, screenshot, or fixture that references one, mark it explicitly as a non-production, test-only account so it is never mistaken for a real user account.
+- **Funded above minimum threshold**: maintain fee-payer balance above the re-funding trigger documented in `testnet/monitoring/balance-thresholds.md` so demonstrations and CI fixtures never fail mid-presentation due to gas exhaustion.
 
 ### Quarterly check procedure
 
