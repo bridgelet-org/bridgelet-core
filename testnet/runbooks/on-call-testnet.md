@@ -2,31 +2,88 @@
 
 ## Current support posture
 
-Bridgelet testnet support is **best effort**. The current repository does not
-define:
+Bridgelet testnet support is **strictly best effort**. Even though real
+integrators and partners rely on Stellar Testnet for testing and integration,
+the Bridgelet project is an open-source MVP and does not provide
+production-grade operational guarantees.
 
-- an active on-call rotation;
-- a paging destination;
-- 24/7 coverage;
-- an availability SLO;
-- a guaranteed acknowledgement or response time; or
-- active automated testnet monitoring.
+Specifically, the project does **not** maintain:
 
-A maintainer may investigate when available. This runbook is an operational
-guide, not a declaration that someone is always on the hook.
+- **No dedicated on-call team:** No person or team is on the hook or paged for
+  testnet outages.
+- **No active automated monitoring:** No 24/7 synthetic canary, health monitor,
+  or automated pager alerts maintainers to down contracts or RPC failures.
+- **No availability SLA or SLO:** There is no commitment to uptime, error
+  rates, or deployment continuity.
+- **No guaranteed response time:** There is no binding timeframe for issue
+  acknowledgment, triage, or remediation.
 
-The existing [`../docs/support.md`](../docs/support.md) likewise states that no
-response time is guaranteed. Integrators must not use testnet as a
-business-critical service with an assumed SLA.
+Maintainers investigate issues voluntarily when available during normal
+working hours. Integrators must calibrate their architecture, test suites, and
+project milestones to this reality.
+
+```text
+testnet_support_tier: best_effort
+testnet_on_call: not_staffed
+testnet_sla: none
+testnet_active_monitoring: false
+```
+
+## Expectations for integrators and partners
+
+Because testnet has external users depending on it staying reasonably usable,
+integrators should observe the following guidance to calibrate their reliance:
+
+### 1. Do not rely on testnet for mission-critical workflows
+- Testnet is an ephemeral sandbox intended for integration experiments and
+  verification, not for production traffic, critical customer demos without
+  fallbacks, or SLA-backed partner showcases.
+- Expect unannounced redeployments, contract upgrades, and periodic platform
+  resets by the Stellar Development Foundation (SDF).
+
+### 2. Outage awareness relies on community reports
+- Because there is no active 24/7 monitoring daemon paging maintainers,
+  maintainers are generally unaware of testnet incidents until an integrator
+  or community member files a report.
+- If you observe an endpoint failure, contract revert, or invalid state,
+  report it promptly via the `[testnet]` GitHub issue workflow described in
+  [`../docs/support.md`](../docs/support.md).
+
+### 3. Expected response and triage times
+While no binding SLA exists, maintainers observe the following informal
+prioritization during triage:
+
+| Issue scope | Example | Informal triage expectation |
+|---|---|---|
+| **Ecosystem-blocking outage** | Complete deployment failure, missing contracts following an SDF reset, or invalid contract IDs affecting all users | Best-effort maintainer triage as priority, typically within 1–2 business days |
+| **Suspected security vulnerability** | Signature bypass, unauthorized transfer, state corruption | Acknowledged via private security reporting as maintainer availability permits |
+| **Degraded service / single-user issue** | Nonce desync, transient RPC error, or local integration query | Handled as general issue backlog during regular maintenance |
+
+### 4. Resiliency recommendations for client integrations
+- **Handle periodic SDF resets:** The SDF periodically resets testnet, wiping
+  all accounts, contract storage, and ledgers. Automate your deployment and
+  initialization fixtures so you can rebuild state after a reset.
+- **Implement graceful retry and timeout logic:** Public testnet RPC nodes can
+  experience rate-limiting, lag, or downtime. Build client-side exponential
+  backoff and fallback RPC configurations.
+- **Pin contract IDs:** Verify contract IDs against
+  [`../registry/contract-status.md`](../registry/contract-status.md) and
+  [`../docs/changelog.md`](../docs/changelog.md) before testing runs.
+- **Use local sandboxes for automated CI:** For deterministic CI/CD pipelines
+  and regression tests, prefer a local standalone Soroban sandbox or mock
+  environment over the shared public testnet.
 
 ## Repository evidence
 
 | Evidence | What it establishes |
 |---|---|
-| [`../docs/support.md`](../docs/support.md) | maintainer support is best effort |
-| [`../registry/verify-contract-live.md`](../registry/verify-contract-live.md) | health checks are manual, not automated monitoring |
-| [`.github/workflows/test.yml`](../../.github/workflows/test.yml) | source build/test validation; no testnet event monitor |
-| [`.github/workflows/deploy-testnet.yml`](../../.github/workflows/deploy-testnet.yml) | manual deployment trigger; no scheduled health check |
+| [`../docs/support.md`](../docs/support.md) | Maintainer support is best effort with no response guarantee |
+| [`../docs/contact-and-ownership.md`](../docs/contact-and-ownership.md) | No named owner, `CODEOWNERS`, or on-call contacts are staffed |
+| [`../monitoring/README.md`](../monitoring/README.md) | No active monitoring is running (`testnet_monitoring: not_configured`) |
+| [`../monitoring/uptime-check-spec.md`](../monitoring/uptime-check-spec.md) | Health checks and uptime monitoring are future specifications only |
+| [`../registry/verify-contract-live.md`](../registry/verify-contract-live.md) | Contract health checks are manual operator procedures, not automated monitors |
+| [`.github/workflows/test.yml`](../../.github/workflows/test.yml) | Source build/test validation; no testnet event monitor |
+| [`.github/workflows/deploy-testnet.yml`](../../.github/workflows/deploy-testnet.yml) | Manual deployment trigger; no scheduled health check |
 
 Deployment documents also disagree about which contracts are live. Treat a
 stored contract ID as unverified until a read-only call succeeds on the
@@ -79,7 +136,8 @@ acknowledged owners.
    Any emergency mutation requires separate authorization and a recorded
    rationale.
 9. For ordinary testnet problems, use the `[testnet]` issue process in
-   `support.md`. Priority does not imply a response-time guarantee.
+   [`../docs/support.md`](../docs/support.md). Priority does not imply a
+   response-time guarantee.
 10. For possible vulnerabilities, do not open a public issue. Use GitHub's
     private vulnerability reporting channel.
 
@@ -137,4 +195,6 @@ testnet_monitoring: not_configured
 - [`rpc-outage.md`](rpc-outage.md)
 - [`reentrancy-suspicion.md`](reentrancy-suspicion.md)
 - [`../docs/support.md`](../docs/support.md)
+- [`../docs/contact-and-ownership.md`](../docs/contact-and-ownership.md)
+- [`../monitoring/uptime-check-spec.md`](../monitoring/uptime-check-spec.md)
 - [`../registry/verify-contract-live.md`](../registry/verify-contract-live.md)
