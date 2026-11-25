@@ -59,6 +59,7 @@ export XLM_SAC="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 | [Reading contract storage](reading-contract-storage.md) | Inspect persistent storage through RPC | Read-only |
 | [Integration test harness notes](integration-test-harness-notes.md) | Test against live testnet versus the in-process test environment | Read-only |
 | [Simulating batch account creation](batch-account-creation-mock.md) | Loop individual deployments while `account_factory` is unavailable | State-changing |
+| [Create and fund an ephemeral account](create-and-fund-ephemeral-account.md) | `initialize()`, fund with XLM, then `record_payment()` with expected `created`/`payment` events | State-changing |
 | [Monitoring a single account's lifecycle](monitoring-a-single-account-lifecycle.md) | Order the event sequence from creation to sweep or expiry | Read-only |
 | [Testing locked mode](testing-locked-mode.md) | Initialize a locked controller and confirm other destinations are rejected | State-changing |
 | [Update authorized destination](update-authorized-destination-flow.md) | `update_authorized_destination` and its `dest_upd` event | State-changing |

@@ -8,7 +8,7 @@ This is the **primary** way to move funds out of an `EphemeralAccount`, and the 
 2. Obtaining a signature without hand-rolling an XDR encoder.
 3. Submitting `execute_sweep()` and recognising success vs. each common failure.
 
-> **Deploy an `EphemeralAccount` first.** This walkthrough starts from an initialized account that has recorded at least one payment. The create-then-pay flow is covered separately in `testnet/examples/create-and-fund-ephemeral-account.md`; if that document is not in your checkout yet, `testnet/config/expiry-ledger-testing.md` has the exact `deploy` + `initialize` + `record_payment` commands. Contract IDs: `testnet/registry/contract-status.md`.
+> **Deploy an `EphemeralAccount` first.** This walkthrough starts from an initialized account that has recorded at least one payment. The create-then-pay flow is covered in `testnet/examples/create-and-fund-ephemeral-account.md`; `testnet/config/expiry-ledger-testing.md` covers the expiry arithmetic. Contract IDs: `testnet/registry/contract-status.md`.
 
 > **Non-obvious:** do **not** try to call `EphemeralAccount::sweep()` directly. That function accepts an `auth_signature` argument and then ignores it — it only checks that the caller is the `authorized_controller`. Calling it directly gives you a *false* sense that signature checking works. See `testnet/security/unverified-signature-path-warning.md`.
 
