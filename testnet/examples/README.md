@@ -82,25 +82,26 @@ export XLM_SAC="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 
 | Example | Pattern demonstrated | Execution profile |
 |---|---|---|
-| [Pay and record](#pay-and-record) | Transfer native XLM via SAC and record the payment in contract state | State-changing |
-| [Check sweep readiness](#check-sweep-readiness) | Pre-sweep readiness check with `can_sweep` and controller nonce retrieval | Read-only |
-| [Authorize and sweep](#authorize-and-sweep) | Sign sweep payload with fresh nonce and submit `execute_sweep` via relayer | State-changing |
-| [Signed sweep walkthrough](signed-sweep-walkthrough.md) | Detailed walkthrough of Ed25519 signature generation, message hashing, and sweep | State-changing |
-| [Gas-free claim walkthrough](gas-free-claim-walkthrough.md) | Recipient-authorized, relayer-submitted `claim()` flow | State-changing |
-| [Multi-asset sweep](multi-asset-sweep.md) | Sweeping accounts holding multiple recorded assets and validating `SweepExecutedMulti` | State-changing |
-| [Testing locked mode](testing-locked-mode.md) | Operating controller in locked mode with a restricted destination address | State-changing |
-| [Update authorized destination](update-authorized-destination-flow.md) | Administrative rotation of authorized sweep destination with event verification | State-changing |
-
-### 3. Storage, Error Handling & Integration Tooling
-
-| Example | Pattern demonstrated | Execution profile |
-|---|---|---|
-| [Inspect events and balances](#inspect-events-and-balances) | Correlating Soroban contract events with finalized account state and balances | Read-only |
-| [Reading contract storage](reading-contract-storage.md) | Directly reading contract instance and persistent storage keys via RPC | Read-only |
-| [Error handling](error-handling.md) | Mapping contract error codes/discriminants to robust client handling logic | Read-only |
-| [Idempotency considerations](idempotency-considerations.md) | Replay protection, nonce progression, and safe retry strategies | Read-only |
-| [Integration test harness notes](integration-test-harness-notes.md) | Strategy for running tests against live testnet vs. in-process mock environments | Read-only |
-| [Postman RPC collection](postman-collection.json) | Ready-to-import JSON collection of raw JSON-RPC probes for Postman or curl | Read-only |
+| [Read account state](#read-account-state) | Decode status, expiry, and recorded payments | Read-only |
+| [Check sweep readiness](#check-sweep-readiness) | Cross-check `can_sweep` and controller nonce | Read-only |
+| [Create and initialize](#create-and-initialize) | Deploy a fresh ephemeral account | State-changing |
+| [Pay and record](#pay-and-record) | Transfer native XLM, then record it in contract state | State-changing |
+| [Authorize and sweep](#authorize-and-sweep) | Submit a signed `SweepController::execute_sweep` | State-changing |
+| [Inspect events and balances](#inspect-events-and-balances) | Correlate events with the final terminal state | Read-only |
+| [Pre-flight account status checks](checking-account-status.md) | Gate a state-changing call on `is_expired`, `get_info` and `can_sweep` | Read-only |
+| [Error handling](error-handling.md) | Map each contract error discriminant to handling code | Read-only |
+| [Idempotency considerations](idempotency-considerations.md) | Reason about a duplicate sweep and the one safe retry | Read-only |
+| [Signed sweep walkthrough](signed-sweep-walkthrough.md) | Primary path: Ed25519-signed `execute_sweep` | State-changing |
+| [Gas-free claim walkthrough](gas-free-claim-walkthrough.md) | Recipient-signed, relayer-submitted `claim()` | State-changing |
+| [Multi-asset sweep](multi-asset-sweep.md) | Sweep several recorded assets and read `SweepExecutedMulti` | State-changing |
+| [Expiry and recovery](expiry-and-recovery.md) | Let an account expire and verify the recovery path | State-changing |
+| [Reading contract storage](reading-contract-storage.md) | Inspect persistent storage through RPC | Read-only |
+| [Integration test harness notes](integration-test-harness-notes.md) | Test against live testnet versus the in-process test environment | Read-only |
+| [Simulating batch account creation](batch-account-creation-mock.md) | Loop individual deployments while `account_factory` is unavailable | State-changing |
+| [Create and fund an ephemeral account](create-and-fund-ephemeral-account.md) | `initialize()`, fund with XLM, then `record_payment()` with expected `created`/`payment` events | State-changing |
+| [Monitoring a single account's lifecycle](monitoring-a-single-account-lifecycle.md) | Order the event sequence from creation to sweep or expiry | Read-only |
+| [Testing locked mode](testing-locked-mode.md) | Initialize a locked controller and confirm other destinations are rejected | State-changing |
+| [Update authorized destination](update-authorized-destination-flow.md) | `update_authorized_destination` and its `dest_upd` event | State-changing |
 
 ## Keeping this index current
 
