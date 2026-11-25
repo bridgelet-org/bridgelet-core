@@ -333,4 +333,5 @@ stellar contract invoke \
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.1 | 2026-11-24 | Verified the message format against `contracts/sweep_controller/src/authorization.rs::construct_sweep_message()` and the signer output format against `tools/sweep-signer`; confirmed the example public key matches `deployments/testnet.json` → `config.authorizedSigner` |
 | 1.0 | 2026-09-26 | Initial signed sweep walkthrough |

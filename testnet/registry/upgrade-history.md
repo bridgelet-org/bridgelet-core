@@ -70,6 +70,8 @@ After successful upgrade, immediately record in this log:
 
 ### Verification After Upgrade
 
+See [`testnet/runbooks/upgrade-verification.md`](../runbooks/upgrade-verification.md) for the complete operational runbook on post-upgrade verification, behavioral probes, and state preservation checks.
+
 ```bash
 # 1. Verify contract still responds
 stellar contract invoke --id <ID> --network testnet --source testnet-healthcheck -- get_status
@@ -152,6 +154,7 @@ If an upgrade introduces critical bugs:
 
 ## Related Documentation
 
+- `testnet/runbooks/upgrade-verification.md` - Operational runbook for verifying upgrades and behavioral probing
 - `testnet/registry/contract-status.md` - Current deployment status
 - `testnet/registry/admin-addresses.md` - Admin addresses for upgrade auth
 - `testnet/registry/verify-contract-live.md` - Post-upgrade health checks

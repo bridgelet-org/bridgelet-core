@@ -1,29 +1,55 @@
 # Testnet Integration Examples
 
-This directory is the home for small, operational examples that exercise the
-current Bridgelet contracts on Stellar Testnet. The examples are intentionally
-more concrete than [`docs/api-reference.md`](../../docs/api-reference.md),
-which documents the abstract interface and types.
+This directory is the home for small, runnable-in-spirit code snippets,
+walkthroughs, and integration patterns demonstrating how to interact with
+Bridgelet contracts on Stellar Testnet.
 
-These snippets are integration guides, not a production SDK. Testnet is reset
-periodically, deployment records can become stale, and every contract ID must
-be verified before it is used.
+While [`docs/api-reference.md`](../../docs/api-reference.md) defines abstract
+interface signatures, method parameters, and type definitions, the examples in
+this directory show how those pieces fit together in real integration flows:
+which preconditions to verify before calling a method, how arguments are
+encoded, how to simulate read-only calls, how to serialize signing and nonce
+handling, and how to verify on-chain state and balances after submission.
+
+> **Testnet Notice:** The code snippets here are integration patterns and
+> operator references, not a packaged production SDK. Stellar Testnet is reset
+> periodically, deployment records can change, and contract IDs must always be
+> verified live before use.
+
+## Integration Patterns & Languages
+
+The examples in this directory illustrate patterns across multiple toolchains:
+
+- **Stellar CLI (`stellar contract ...`):** Canonical shell commands for
+  operators and developers running simulations, manual invocations, and event
+  queries.
+- **JavaScript / TypeScript SDK (`@stellar/stellar-sdk`):** Client-side
+  patterns for account generation, simulation via `simulateTransaction`, XDR
+  envelope construction, and Ed25519 hash signing.
+- **Direct Soroban RPC (JSON-RPC / HTTP):** Raw request payloads for Postman,
+  curl, or custom HTTP clients interacting with `simulateTransaction`,
+  `sendTransaction`, and `getEvents`.
+- **Rust Contract Client / In-Process Testing:** Rust patterns for backend
+  relayers and service components.
 
 ## Before running an example
 
-- Use the exact network settings in
-  [`testnet/docs/network-config.md`](../docs/network-config.md).
-- Verify the contract IDs against a live read-only query. The canonical status
-  registry currently conflicts with older deployment artifacts, so a copied ID
-  is not proof of availability.
-- Use a funded testnet `G...` identity for fees. Never put a Stellar secret
-  key or Ed25519 signing seed in this repository, a URL, or a log.
-- Prefer a fresh `EphemeralAccount` for a create-pay-sweep walkthrough. A
-  reusable deployment ID and newly deployed child account are different things.
-- Treat successful submission, a contract event, and a balance change as
-  separate facts. A complete sweep workflow verifies all three.
+1. **Check network configuration:** Use the exact passphrase and RPC settings in
+   [`../docs/network-config.md`](../docs/network-config.md).
+2. **Verify live contract IDs:** Confirm deployment IDs via read-only simulation
+   or [`../registry/contract-status.md`](../registry/contract-status.md) rather
+   than assuming static IDs are live.
+3. **Use funded testnet identities:** Use a funded testnet `G...` identity for
+   transaction fees. Never commit or log secret keys (`S...`) or Ed25519 signing seeds.
+4. **Distinguish simulation from submission:** Always run `--simulate-only` or
+   `simulateTransaction` first to check return values and preconditions without
+   spending fees or advancing state.
+5. **Separate transaction success, events, and balance changes:** A complete
+   sweep or claim verification confirms the transaction status, inspects
+   contract state (`get_status == Swept`), and validates the recipient's token
+   balance.
 
-Common placeholders:
+Common environment variables:
 
 ```bash
 export NETWORK=testnet
@@ -41,7 +67,20 @@ export XLM_SAC="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 
 ## Example index
 
-| Example | Use it to exercise | Network effect |
+### 1. Account Lifecycle & Management
+
+| Example | Pattern demonstrated | Execution profile |
+|---|---|---|
+| [Read account state](#read-account-state) | Read-only simulation to decode status, expiry, and recorded payments | Read-only |
+| [Create and initialize](#create-and-initialize) | Deploy a fresh ephemeral account and invoke `initialize` with controller linkage | State-changing |
+| [Pre-flight account status checks](checking-account-status.md) | Safely gating calls using composite checks (`is_expired`, `get_info`, `can_sweep`) | Read-only |
+| [Monitoring a single account's lifecycle](monitoring-a-single-account-lifecycle.md) | Reconstructing full account history from deployed events to terminal state | Read-only |
+| [Simulating batch account creation](batch-account-creation-mock.md) | Loop individual deployments while `account_factory` is undeployed on testnet | State-changing |
+| [Expiry and recovery](expiry-and-recovery.md) | Handling expired accounts and executing `recover` to return un-swept funds | State-changing |
+
+### 2. Payment & Sweep Workflows
+
+| Example | Pattern demonstrated | Execution profile |
 |---|---|---|
 | [Read account state](#read-account-state) | Decode status, expiry, and recorded payments | Read-only |
 | [Check sweep readiness](#check-sweep-readiness) | Cross-check `can_sweep` and controller nonce | Read-only |
@@ -66,8 +105,9 @@ export XLM_SAC="CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
 
 ## Keeping this index current
 
-Whenever a file is added to or removed from `testnet/examples/`, update the
-table above in the same pull request. Check for drift with:
+Whenever an example file is added or modified in `testnet/examples/`, keep this
+index table synchronized in the same pull request. Verify indexing completeness
+with:
 
 ```bash
 for f in testnet/examples/*.md; do
@@ -75,9 +115,6 @@ for f in testnet/examples/*.md; do
   grep -q "($b)" testnet/examples/README.md || echo "not indexed: $b"
 done
 ```
-
-`postman-collection.json` is listed above and is the only non-Markdown entry.
-| [Postman RPC collection](postman-collection.json) | Raw `simulateTransaction` probes for Postman/HTTP | Read-only |
 
 ## Read account state
 
@@ -296,11 +333,15 @@ transaction result and decoded contract state.
 
 ## Related documents
 
-- [`synthetic-transaction-plan.md`](../monitoring/synthetic-transaction-plan.md)
+- [`../../docs/api-reference.md`](../../docs/api-reference.md) — abstract
+  contract interface signatures and type definitions
+- [`../../docs/SIGNATURE_FORMAT.md`](../../docs/SIGNATURE_FORMAT.md) — signature
+  format details and hashing specification
+- [`../monitoring/synthetic-transaction-plan.md`](../monitoring/synthetic-transaction-plan.md)
   — proposal for a periodic end-to-end canary
-- [`explorer-links.md`](../monitoring/explorer-links.md) — links for recorded
-  contract IDs
-- [`testnet/docs/getting-started.md`](../docs/getting-started.md) — broader
+- [`../monitoring/explorer-links.md`](../monitoring/explorer-links.md) — links
+  for recorded contract IDs
+- [`../docs/getting-started.md`](../docs/getting-started.md) — broader
   setup and troubleshooting
-- [`docs/SIGNATURE_FORMAT.md`](../../docs/SIGNATURE_FORMAT.md) — signature
-  format details
+- [`../registry/contract-status.md`](../registry/contract-status.md) — current
+  testnet deployment status table
