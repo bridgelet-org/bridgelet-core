@@ -101,19 +101,20 @@ Concretely, the `SorobanAuthorizationEntry` the recipient signs covers:
 
 ### Building It in an SDK
 
-In the JS SDK the entry is assembled alongside the transaction and the account signs the operation:
+In the JS SDK the entry is assembled alongside the transaction and the account signs the operation. The exact constructor signatures are SDK-version-specific — the CLI form below is the shape most reliable to verify first — but the mechanics are:
 
 ```typescript
-import { SorobanRpc, Contract, Networks, TransactionBuilder, Operation } from '@stellar/stellar-sdk';
+import { Networks, TransactionBuilder, Operation } from '@stellar/stellar-sdk';
 
 const tx = new TransactionBuilder(account, { fee: '100', networkPassphrase: Networks.TESTNET })
-  .addOperation(new Operation.Contract({ contract, source: new Account(ephemeralId, '0') }))
+  .addOperation(new Operation.Contract({ contract: SWEEP_CONTROLLER_ID }))
   .setTimeout(300)
   .build();
 
 // The account signs the operation; Soroban auth entries are derived and
-// attached from that signature. No custom digest is constructed here.
-await tx.sign(recipientKeypair).sign(relayerKeypair);
+// attached from the recipient's signature. No custom digest is constructed here.
+await tx.sign(recipientKeypair);
+await tx.sign(relayerKeypair);
 ```
 
 The recipient signature comes from `tx.sign(recipientKeypair)`; the relayer signature covers the envelope and pays the fee. Both signatures end up in one envelope — that is what makes the flow "gas-free" for the recipient.
@@ -220,6 +221,7 @@ This is a meaningful security difference from the signed path: **the recipient's
 |---|---|---|
 | Auth failure, no specific error | Recipient did not sign the `claim` invocation | Ensure the auth entry names `claim` with args `[recipient, ephemeral_account]` |
 | Auth failure, signature rejected | Entry was signed but an argument differs | Every argument is bound; `recipient` and `ephemeral_account` must match exactly |
+| Submission rejected at envelope stage | The `claim` invocation has no `Address` credentials for the recipient | Build the envelope so `claim` carries an `Address` auth entry for `$RECIPIENT` — the CLI attaches one automatically, and the SDK gets one from `tx.sign(recipientKeypair)` |
 | `UnauthorizedDestination` | Locked mode, recipient ≠ locked destination | Use the locked address, or change it while nonce is still 0 |
 | `AccountNotReady` | No payment recorded, or summed amount is 0 | `record_payment()` first |
 | `AccountExpired` | Past `expiry_ledger` | Expired accounts go to `recovery_address`; see `testnet/examples/expiry-and-recovery.md` |
@@ -263,4 +265,5 @@ The signed path is the more common integration. `claim()` is a genuinely differe
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.1 | 2026-11-24 | Tightened the Step 1 SDK snippet; added the recipient-signature submission failure row |
 | 1.0 | 2026-09-26 | Initial claim() walkthrough |

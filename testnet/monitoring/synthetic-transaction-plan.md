@@ -150,6 +150,10 @@ record_payment(
 )
 ```
 
+Signature in the deployed `EphemeralAccount` contract:
+`record_payment(amount: i128, asset: Address)`
+(`contracts/ephemeral_account/src/lib.rs:86`).
+
 Then require:
 
 - `get_status() == 1` (`PaymentReceived`);
